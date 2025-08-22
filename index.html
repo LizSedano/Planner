@@ -119,7 +119,13 @@
             <input id="fDue" type="date" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" />
           </label>
           <label class="text-sm w-40">Estado
-            <select id="fStatus" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2">
+            <select id="fStatus" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2"> 
+              <label class="text-sm w-40">Color
+  <input id="fColor" type="color"
+         class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-1 py-2"
+         value="#10b981" />
+</label>
+
               <option value="backlog">Backlog</option>
               <option value="doing">En curso</option>
               <option value="done">Hecho</option>
@@ -190,6 +196,7 @@
     const modal = $('#taskModal');
     const modalTitle = $('#modalTitle');
     const fTitle=$('#fTitle'), fAssignee=$('#fAssignee'), fDue=$('#fDue'), fStatus=$('#fStatus'), fDetails=$('#fDetails');
+    const fColor = document.querySelector('#fColor');
     const saveBtn=$('#saveBtn'), deleteBtn=$('#deleteBtn');
     let editingId = null;
 
@@ -213,6 +220,12 @@
       const tpl=$('#taskCardTpl');
       const node=tpl.content.firstElementChild.cloneNode(true);
       node.dataset.id=t.id; $('.title',node).textContent=t.title; $('.assignee',node).textContent=t.assignee||'—'; $('.due',node).textContent=t.due_date? new Date(t.due_date).toLocaleDateString():'—';
+      if (t.color) {
+  node.style.borderLeft = `6px solid ${t.color}`;
+} else {
+  node.style.borderLeft = '6px solid transparent';
+}
+
       const detailsEl=$('.details',node); if(t.details){ detailsEl.textContent=t.details; detailsEl.classList.remove('hidden'); }
       $('.editBtn',node).addEventListener('click',()=> openModal(t));
       node.addEventListener('dragstart',(e)=>{e.dataTransfer.setData('text/plain',t.id); requestAnimationFrame(()=> node.classList.add('opacity-50'));});
@@ -275,7 +288,7 @@
       } else {
         editingId = null;
         modalTitle.textContent='Nueva tarea';
-        fTitle.value=''; fAssignee.value=''; fDue.value=''; fStatus.value='backlog'; fDetails.value='';
+        fTitle.value=''; fAssignee.value=''; fDue.value=''; fStatus.value='backlog'; fDetails.value=''; fColor.value = task.color || '#10b981';
         deleteBtn.classList.add('hidden');
         subtasksList.innerHTML=''; $('#subtasksEmpty').classList.add('hidden'); $('#subtasksHint').classList.remove('hidden'); addSubtaskBtn.disabled=true; subtaskInput.disabled=true;
       }
@@ -283,12 +296,12 @@
       modal.showModal();
     }
 
-    $('#newTaskBtn').addEventListener('click',()=> openModal());
+    $('#newTaskBtn').addEventListener('click',()=> openModal()); 
     $('#closeModal').addEventListener('click',(e)=>{ e.preventDefault(); modal.close(); });
 
     saveBtn.addEventListener('click', async (e)=>{
       e.preventDefault();
-      const payload={ title:fTitle.value.trim(), assignee:fAssignee.value.trim()||null, due_date:fDue.value||null, status:fStatus.value, details:fDetails.value.trim()||null };
+      const payload={ title:fTitle.value.trim(), assignee:fAssignee.value.trim()||null, due_date:fDue.value||null, status:fStatus.value, details:fDetails.value.trim()||null,  color: fColor.value || null, };
       if(!payload.title) return;
       try{
         if(editingId){ await updateTask(editingId,payload); }
