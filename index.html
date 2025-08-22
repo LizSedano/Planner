@@ -1,103 +1,112 @@
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-slate-100 dark:bg-slate-900">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Planner Colaborativo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    #taskModal { z-index: 50; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Planner Colaborativo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+#taskModal { z-index: 50; }
+.column-header { position: sticky; top: 0; z-index: 10; background-color: rgba(255,255,255,0.8); backdrop-filter: blur(6px); }
+.dark .column-header { background-color: rgba(15,23,42,0.8); }
+</style>
 </head>
 <body class="h-full">
-  <div class="min-h-full flex flex-col">
-    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-0 z-20 shadow-sm px-4 py-2 flex items-center justify-between">
-      <h1 class="text-lg font-bold text-slate-700 dark:text-slate-200">📌 Planner Colaborativo</h1>
-    </header>
+<div class="min-h-full flex flex-col">
+<header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-0 z-20 shadow-sm px-4 py-2 flex items-center justify-between">
+<h1 class="text-lg font-bold text-slate-700 dark:text-slate-200">📌 Planner Colaborativo</h1>
+</header>
 
-    <main class="flex-1 p-4 grid grid-cols-3 gap-4">
-      <!-- Columna Backlog -->
-      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
-          <button data-collapse="backlog" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-        </div>
-        <div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
-      </section>
 
-      <!-- Columna Doing -->
-      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
-          <button data-collapse="doing" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-        </div>
-        <div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
-      </section>
+<main class="flex-1 p-4 grid grid-cols-3 gap-4">
+<!-- Columna Backlog -->
+<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
+<button data-collapse="backlog" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+</div>
+<div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
+</section>
 
-      <!-- Columna Done -->
-      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
-          <button data-collapse="done" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-        </div>
-        <div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
-      </section>
-    </main>
 
-    <!-- Botón flotante Nueva Tarea -->
-    <button id="btnNewTask" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg z-30">
-      ➕ Nueva tarea
-    </button>
+<!-- Columna Doing -->
+<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
+<button data-collapse="doing" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+</div>
+<div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
+</section>
 
-  </div>
 
-  <!-- Modal de Tareas -->
-  <div id="taskModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
-    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg w-96 p-4 space-y-3">
-      <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Tarea</h3>
-      <form id="taskForm" class="space-y-2">
-        <input type="hidden" id="fId">
-        <div>
-          <label class="block text-sm">Título</label>
-          <input id="fTitle" class="w-full rounded border px-2 py-1" required>
-        </div>
-        <div>
-          <label class="block text-sm">Detalles</label>
-          <textarea id="fDetails" class="w-full rounded border px-2 py-1"></textarea>
-        </div>
-        <div>
-          <label class="block text-sm">Estado</label>
-          <select id="fStatus" class="w-full rounded border px-2 py-1">
-            <option value="backlog">Backlog</option>
-            <option value="doing">En curso</option>
-            <option value="done">Hecho</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm">Color</label>
-          <input type="color" id="fColor" class="w-12 h-8 border rounded">
-        </div>
-        <div>
-          <label class="block text-sm">Fecha límite</label>
-          <input type="date" id="fDue" class="w-full rounded border px-2 py-1">
-        </div>
-        <div>
-          <label class="block text-sm">Responsable</label>
-          <input id="fAssignee" class="w-full rounded border px-2 py-1">
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
-          <button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<!-- Columna Done -->
+<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
+<button data-collapse="done" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+</div>
+<div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
+</section>
+</main>
 
-  <script>
-    // Botón flotante abre modal
-    document.getElementById('btnNewTask').addEventListener('click', ()=>{
-      openModal();
-    });
-  </script>
+
+<!-- Botón flotante Nueva Tarea -->
+<button id="btnNewTask" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg z-30">
+➕ Nueva tarea
+</button>
+
+
+</div>
+
+
+<!-- Modal de Tareas -->
+<div id="taskModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
+<div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg w-96 p-4 space-y-3">
+<h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Tarea</h3>
+<form id="taskForm" class="space-y-2">
+<input type="hidden" id="fId">
+<div>
+<label class="block text-sm">Título</label>
+<input id="fTitle" class="w-full rounded border px-2 py-1" required>
+</div>
+<div>
+<label class="block text-sm">Detalles</label>
+<textarea id="fDetails" class="w-full rounded border px-2 py-1"></textarea>
+</div>
+<div>
+<label class="block text-sm">Estado</label>
+<select id="fStatus" class="w-full rounded border px-2 py-1">
+<option value="backlog">Backlog</option>
+<option value="doing">En curso</option>
+<option value="done">Hecho</option>
+</select>
+</div>
+<div>
+<label class="block text-sm">Color</label>
+<input type="color" id="fColor" class="w-12 h-8 border rounded">
+</div>
+<div>
+<label class="block text-sm">Fecha límite</label>
+<input type="date" id="fDue" class="w-full rounded border px-2 py-1">
+</div>
+<div>
+<label class="block text-sm">Responsable</label>
+<input id="fAssignee" class="w-full rounded border px-2 py-1">
+</div>
+<div class="flex justify-end gap-2 pt-2">
+<button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
+<button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
+</div>
+</form>
+</div>
+</div>
+
+
+<script>
+// Botón flotante abre modal
+document.getElementById('btnNewTask').addEventListener('click', ()=>{
+openModal();
+});
+</script>
 </body>
 </html>
