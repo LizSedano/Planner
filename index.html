@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planner Colaborativo — Compartible con 1 enlace</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="color-scheme" content="light dark" />
+  <style>
+    /* Estética mínima y limpia */
+    :root {
+      color-scheme: light dark;
+    }
+    .glass {
+      backdrop-filter: blur(6px);
+      background: rgb(255 255 255 / 0.7);
+    }
+    @media (prefers-color-scheme: dark) {
+      .glass { background: rgb(17 24 39 / 0.5); }
+    }
+    .column { min-height: 420px; }
+    .handle { cursor: grab; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
+  <!--
+  ============================
+  🚀 Planner Colaborativo (HTML + Supabase)
+  ============================
+  INSTRUCCIONES RÁPIDAS (léelas una vez):
+  1) Crea una cuenta gratuita en https://supabase.com/ y un proyecto nuevo.
+  2) En la pestaña "SQL" ejecuta este script para crear la tabla (copiar/pegar y ejecutar):
+
+     -- Tabla de tareas
+     create table if not exists public.tasks (
+       id uuid primary key default gen_random_uuid(),
+       board_id text not null,
+       title text not null,
+       details text,
+       status text not null default 'backlog', -- backlog | doing | done
+       due_date date,
+       assignee text,
+       created_at timestamp with time zone default now()
+     );
+
+     -- Habilitar Row Level Security
+     alter table public.tasks enable row level security;
+
+     -- Política: lectura por board_id
+     create policy "Read by board" on public.tasks
+       for select using (true);
+
+     -- Política: inserción por cualquiera
+     create policy "Insert any" on public.tasks
+       for insert with check (true);
+
+     -- Política: actualización sólo por id y mismo board
+     create policy "Update by id" on public.tasks
+       for update using (true) with check (true);
+
+     -- Política: borrado por cualquiera
+     create policy "Delete any" on public.tasks
+       for delete using (true);
+
+  NOTA: Las políticas anteriores son abiertas para simplicidad en entornos de laboratorio/aula.
+  Si quieres limitar por board_id, usa policies con auth o un JWT custom.
+
+  3) Ve a "Project Settings → API" y copia:
+     - Project URL (SUPABASE_URL)
+     - anon public key (SUPABASE_ANON_KEY)
+
+  4) Pega ambas constantes abajo en el bloque <script> (BUSCA: TODO: pega tus claves).
+
+  5) Abre este archivo en tu hosting (GitHub Pages / Netlify / Vercel) o local.
+     Si la URL no contiene ?board=..., el sistema generará uno nuevo automáticamente
+     y te mostrará un botón para copiar el enlace compartible.
+
+  🎯 ¿Qué hace?
+  - Tablero Kanban simple (Backlog, En curso, Hecho)
+  - Tareas con: título, responsable, fecha límite, detalles
+  - Edición en línea y drag & drop entre columnas
+  - Realtime para que todo el equipo vea cambios al instante
+  - Un solo enlace por tablero (board_id en la URL)
+
+  -->
+
+  <header class="sticky top-0 z-10 glass border-b border-slate-200/60 dark:border-slate-700/40">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="size-8 rounded-2xl bg-slate-900 dark:bg-slate-100"></div>
+        <div>
+          <h1 class="text-xl font-bold leading-tight">Planner Colaborativo</h1>
+          <p id="boardLabel" class="text-xs text-slate-600 dark:text-slate-300"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="copyLinkBtn" class="px-3 py-1.5 text-sm rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90">Copiar enlace de este tablero</button>
+        <button id="newBoardBtn" class="px-3 py-1.5 text-sm rounded-xl border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60">Crear tablero nuevo</button>
+        <button id="newTaskBtn" class="px-3 py-1.5 text-sm rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Nueva tarea</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl p-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Backlog -->
+      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
+        <div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
+      </section>
+      <!-- Doing -->
+      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
+        <div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
+      </section>
+      <!-- Done -->
+      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
+        <div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal Crear/Editar -->
+  <dialog id="taskModal" class="rounded-2xl w-full max-w-lg p-0 backdrop:bg-black/40">
+    <form method="dialog" class="glass border border-slate-200/60 dark:border-slate-700/40 rounded-2xl p-4">
+      <div class="flex items-start justify-between">
+        <h3 id="modalTitle" class="text-lg font-semibold">Nueva tarea</h3>
+        <button id="closeModal" class="text-slate-500">✕</button>
+      </div>
+      <div class="grid grid-cols-1 gap-3 mt-3">
+        <label class="text-sm">Título
+          <input id="fTitle" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Escribe el título..." required />
+        </label>
+        <label class="text-sm">Responsable
+          <input id="fAssignee" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Nombre o iniciales" />
+        </label>
+        <label class="text-sm">Fecha límite
+          <input id="fDue" type="date" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" />
+        </label>
+        <label class="text-sm">Estado
+          <select id="fStatus" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2">
+            <option value="backlog">Backlog</option>
+            <option value="doing">En curso</option>
+            <option value="done">Hecho</option>
+          </select>
+        </label>
+        <label class="text-sm">Detalles
+          <textarea id="fDetails" rows="4" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Notas, checklist, links, etc."></textarea>
+        </label>
+      </div>
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button id="deleteBtn" type="button" class="hidden px-3 py-1.5 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Eliminar</button>
+        <button id="saveBtn" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="taskCardTpl">
+    <article class="task glass rounded-2xl border border-slate-200/60 dark:border-slate-700/40 p-3 handle" draggable="true">
+      <div class="flex items-center justify-between gap-2">
+        <h4 class="title font-semibold truncate"></h4>
+        <button class="editBtn text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60">Editar</button>
+      </div>
+      <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+        <div class="flex items-center gap-2"><span class="text-slate-400">👤</span><span class="assignee">—</span></div>
+        <div class="flex items-center gap-2"><span class="text-slate-400">🗓️</span><span class="due">—</span></div>
+      </div>
+      <p class="mt-2 text-sm details whitespace-pre-wrap hidden"></p>
+    </article>
+  </template>
+
+  <!-- Supabase (ESM CDN) -->
+  <script type="module">
+    // ==========================
+    // 1) CONFIGURA TU SUPABASE
+    // ==========================
+    // TODO: ⚠️ Pega tus credenciales aquí
+    const SUPABASE_URL = "https://vdzslwuljwifougvwrxm.supabase.co"; // <- pega tu URL
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkenNsd3VsandpZm91Z3Z3cnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjM0MTIsImV4cCI6MjA3MTM5OTQxMn0._695RjBlFLllI--P5DdSxSEGrJ4odmWblkWn5AAlGP4";               // <- pega tu anon key
+
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ==========================
+    // 2) UTILIDADES
+    // ==========================
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+
+    function uid(n=8){return crypto.getRandomValues(new Uint8Array(n)).reduce((a,b)=>a+("0"+b.toString(16)).slice(-2),"").slice(0,n)}
+
+    function getBoardId(){
+      const params = new URLSearchParams(location.search);
+      let b = params.get('board');
+      if(!b){
+        b = uid(10);
+        params.set('board', b);
+        history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
+      }
+      return b;
+    }
+
+    const boardId = getBoardId();
+    const boardLabel = $('#boardLabel');
+    boardLabel.textContent = `Tablero: ${boardId}`;
+
+    const columns = {
+      backlog: $('#col-backlog'),
+      doing: $('#col-doing'),
+      done: $('#col-done')
+    };
+
+    const modal = $('#taskModal');
+    const modalTitle = $('#modalTitle');
+    const fTitle = $('#fTitle');
+    const fAssignee = $('#fAssignee');
+    const fDue = $('#fDue');
+    const fStatus = $('#fStatus');
+    const fDetails = $('#fDetails');
+    const saveBtn = $('#saveBtn');
+    const deleteBtn = $('#deleteBtn');
+
+    let editingId = null;
+
+    // ==========================
+    // 3) CRUD con Supabase
+    // ==========================
+    async function listTasks(){
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('board_id', boardId)
+        .order('created_at', { ascending: true });
+      if(error){ console.error(error); return []; }
+      return data;
+    }
+
+    async function insertTask(payload){
+      payload.board_id = boardId;
+      const { data, error } = await supabase.from('tasks').insert(payload).select().single();
+      if(error) throw error;
+      return data;
+    }
+
+    async function updateTask(id, patch){
+      const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select().single();
+      if(error) throw error;
+      return data;
+    }
+
+    async function deleteTask(id){
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if(error) throw error;
+    }
+
+    // ==========================
+    // 4) Render
+    // ==========================
+    function taskCard(t){
+      const tpl = $('#taskCardTpl');
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      node.dataset.id = t.id;
+      $('.title', node).textContent = t.title;
+      $('.assignee', node).textContent = t.assignee || '—';
+      $('.due', node).textContent = t.due_date ? new Date(t.due_date).toLocaleDateString() : '—';
+      const detailsEl = $('.details', node);
+      if(t.details){ detailsEl.textContent = t.details; detailsEl.classList.remove('hidden'); }
+
+      $('.editBtn', node).addEventListener('click', () => openModal(t));
+
+      // Drag
+      node.addEventListener('dragstart', (e)=>{
+        e.dataTransfer.setData('text/plain', t.id);
+        requestAnimationFrame(()=> node.classList.add('opacity-50'));
+      });
+      node.addEventListener('dragend', ()=> node.classList.remove('opacity-50'));
+
+      return node;
+    }
+
+    function clearColumns(){ Object.values(columns).forEach(c=> c.innerHTML=''); }
+
+    function render(tasks){
+      clearColumns();
+      for(const t of tasks){
+        const card = taskCard(t);
+        columns[t.status || 'backlog'].appendChild(card);
+      }
+    }
+
+    // ==========================
+    // 5) Drag & Drop entre columnas
+    // ==========================
+    for(const col of Object.values(columns)){
+      col.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        col.classList.add('ring-2','ring-emerald-400/60');
+      });
+      col.addEventListener('dragleave', ()=>{
+        col.classList.remove('ring-2','ring-emerald-400/60');
+      });
+      col.addEventListener('drop', async (e)=>{
+        e.preventDefault();
+        col.classList.remove('ring-2','ring-emerald-400/60');
+        const id = e.dataTransfer.getData('text/plain');
+        const newStatus = col.dataset.status;
+        try { await updateTask(id, { status: newStatus }); } catch(err){ console.error(err); }
+      });
+    }
+
+    // ==========================
+    // 6) Modal lógica
+    // ==========================
+    function openModal(task=null){
+      if(task){
+        editingId = task.id;
+        modalTitle.textContent = 'Editar tarea';
+        fTitle.value = task.title || '';
+        fAssignee.value = task.assignee || '';
+        fDue.value = task.due_date || '';
+        fStatus.value = task.status || 'backlog';
+        fDetails.value = task.details || '';
+        deleteBtn.classList.remove('hidden');
+      } else {
+        editingId = null;
+        modalTitle.textContent = 'Nueva tarea';
+        fTitle.value=''; fAssignee.value=''; fDue.value=''; fStatus.value='backlog'; fDetails.value='';
+        deleteBtn.classList.add('hidden');
+      }
+      modal.showModal();
+    }
+
+    $('#newTaskBtn').addEventListener('click', ()=> openModal());
+    $('#closeModal').addEventListener('click', (e)=>{ e.preventDefault(); modal.close(); });
+
+    saveBtn.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const payload = {
+        title: fTitle.value.trim(),
+        assignee: fAssignee.value.trim() || null,
+        due_date: fDue.value || null,
+        status: fStatus.value,
+        details: fDetails.value.trim() || null,
+      };
+      if(!payload.title) return;
+      try{
+        if(editingId){ await updateTask(editingId, payload); }
+        else { await insertTask(payload); }
+        modal.close();
+      }catch(err){ console.error(err); alert('Error guardando: '+err.message); }
+    });
+
+    deleteBtn.addEventListener('click', async ()=>{
+      if(!editingId) return;
+      if(!confirm('¿Eliminar esta tarea?')) return;
+      try{ await deleteTask(editingId); modal.close(); }catch(err){ alert('Error eliminando: '+err.message); }
+    });
+
+    // ==========================
+    // 7) Realtime y carga inicial
+    // ==========================
+    async function boot(){
+      // Carga inicial
+      render(await listTasks());
+
+      // Suscripción realtime
+      supabase.channel('tasks-channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `board_id=eq.${boardId}` }, (payload)=>{
+          // Estrategia simple: reconsultar y re-render
+          listTasks().then(render);
+        })
+        .subscribe();
+    }
+
+    boot();
+
+    // ==========================
+    // 8) Compartir enlace y tableros
+    // ==========================
+    $('#copyLinkBtn').addEventListener('click', async ()=>{
+      await navigator.clipboard.writeText(location.href);
+      const btn = $('#copyLinkBtn');
+      const old = btn.textContent;
+      btn.textContent = '¡Enlace copiado!';
+      setTimeout(()=> btn.textContent = old, 1500);
+    });
+
+    $('#newBoardBtn').addEventListener('click', ()=>{
+      const params = new URLSearchParams(location.search);
+      params.set('board', uid(10));
+      location.search = params.toString();
+    });
+  </script>
+</body>
+</html>
