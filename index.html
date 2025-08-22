@@ -220,7 +220,8 @@
       return node;
     }
     function clearColumns(){ Object.values(columns).forEach(c=> c.innerHTML=''); }
-    function render(tasks){ clearColumns(); for(const t of tasks){ columns[t.status||'backlog'].appendChild(taskCard(t)); } }
+    function render(tasks){ clearColumns(); for(const t of tasks){ columns[t.status||'backlog'].appendChild(taskCard(t)); }
+    applyAutoCollapse();}
 
     // 6) Drag & drop columnas
     for(const col of Object.values(columns)){
@@ -310,6 +311,50 @@
     // 9) Compartir enlace y tableros
     $('#copyLinkBtn').addEventListener('click', async ()=>{ await navigator.clipboard.writeText(location.href); const b=$('#copyLinkBtn'); const old=b.textContent; b.textContent='¡Enlace copiado!'; setTimeout(()=> b.textContent=old,1500); });
     $('#newBoardBtn').addEventListener('click',()=>{ const p=new URLSearchParams(location.search); p.set('board', uid(10)); location.search=p.toString(); });
+// ==========================
+// Colapso de columnas largas
+// ==========================
+const COLLAPSE_LIMIT = 8; // cuántas tarjetas se ven cuando está plegado
+const collapsedState = { backlog: false, doing: false, done: true }; // por defecto 'Hecho' plegado
+
+function setCollapsed(colKey, collapsed){
+  collapsedState[colKey] = collapsed;
+  const col = columns[colKey];
+  if(!col) return;
+  const cards = Array.from(col.children);
+  cards.forEach((el, i) => {
+    el.style.display = (collapsed && i >= COLLAPSE_LIMIT) ? "none" : "";
+  });
+
+  // Botón (lo creamos si no existe)
+  let btn = document.querySelector(`[data-collapse="${colKey}"]`);
+  if(!btn){
+    const header = col.parentElement.querySelector("h2");
+    if(header){
+      btn = document.createElement("button");
+      btn.dataset.collapse = colKey;
+      btn.className = "text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60";
+      header.parentElement.classList.add("flex","items-center","justify-between");
+      header.parentElement.appendChild(btn);
+    }
+  }
+  if(btn){
+    const hidden = Math.max(0, cards.length - COLLAPSE_LIMIT);
+    btn.textContent = collapsed ? (hidden ? `Desplegar (${hidden})` : "Desplegar") : "Plegar";
+  }
+}
+
+function applyAutoCollapse(){
+  Object.keys(columns).forEach(k => setCollapsed(k, !!collapsedState[k]));
+}
+
+// Toggle al clic
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest("[data-collapse]");
+  if(!btn) return;
+  const key = btn.getAttribute("data-collapse");
+  setCollapsed(key, !collapsedState[key]);
+});
 
     boot();
   </script>
