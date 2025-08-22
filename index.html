@@ -102,11 +102,168 @@
 </div>
 
 
-<script>
-// Botón flotante abre modal
-document.getElementById('btnNewTask').addEventListener('click', ()=>{
-openModal();
-});
+<script type="module">
+  // ================
+  // (Opcional) Supabase
+  // ================
+  const USE_SUPABASE = false; // <- pon true si vas a usar Supabase en este archivo
+  let supabase = null;
+  if (USE_SUPABASE) {
+    const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
+    const SUPABASE_ANON_KEY = "TU-ANON-KEY";
+    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
+  // Estado en memoria (si no usas Supabase)
+  const memory = { tasks: [] };
+
+  // Columnas
+  const columns = {
+    backlog: document.getElementById('col-backlog'),
+    doing:   document.getElementById('col-doing'),
+    done:    document.getElementById('col-done'),
+  };
+
+  // Modal & campos
+  const modal = document.getElementById('taskModal');
+  const form  = document.getElementById('taskForm');
+  const fId   = document.getElementById('fId');
+  const fTitle= document.getElementById('fTitle');
+  const fDetails = document.getElementById('fDetails');
+  const fStatus  = document.getElementById('fStatus');
+  const fColor   = document.getElementById('fColor');
+  const fDue     = document.getElementById('fDue');
+  const fAssignee= document.getElementById('fAssignee');
+
+  document.getElementById('btnNewTask').addEventListener('click', () => openModal());
+  document.getElementById('btnCancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e)=> { if(e.target === modal) closeModal(); });
+  document.addEventListener('keydown', (e)=> { if(e.key === 'Escape') closeModal(); });
+
+  // Tarjeta visual
+  function taskCard(t){
+    const card = document.createElement('article');
+    card.className = 'task bg-white dark:bg-slate-800 rounded-xl shadow p-3';
+    if (t.color) card.style.borderLeft = `6px solid ${t.color}`;
+    card.innerHTML = `
+      <div class="flex items-center justify-between">
+        <h4 class="font-semibold">${escapeHtml(t.title)}</h4>
+        <button class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Editar</button>
+      </div>
+      <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+        <div class="flex items-center gap-2"><span class="text-slate-400">👤</span><span>${escapeHtml(t.assignee||'—')}</span></div>
+        <div class="flex items-center gap-2"><span class="text-slate-400">🗓️</span><span>${t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</span></div>
+      </div>
+      ${t.details ? `<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t.details)}</p>` : ''}
+    `;
+    // Editar
+    card.querySelector('button').onclick = () => openModal(t);
+    return card;
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+  // Render de todas las tareas
+  function clearColumns(){ Object.values(columns).forEach(c => c.innerHTML = ''); }
+  function render(tasks){
+    clearColumns();
+    for (const t of tasks) {
+      const col = columns[t.status || 'backlog'] || columns.backlog;
+      col.appendChild(taskCard(t));
+    }
+    applyAutoCollapse(); // si ya usas el plegado
+  }
+
+  // Abrir/Cerrar modal
+  function openModal(task=null){
+    form.reset();
+    fId.value = task?.id || '';
+    fTitle.value = task?.title || '';
+    fDetails.value = task?.details || '';
+    fStatus.value = task?.status || 'backlog';
+    fColor.value = task?.color || '#10b981';
+    fDue.value = task?.due_date || '';
+    fAssignee.value = task?.assignee || '';
+    fStatus.disabled = false;
+    modal.classList.remove('hidden');
+  }
+  function closeModal(){ modal.classList.add('hidden'); }
+
+  // Guardar
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const payload = {
+      id: fId.value || crypto.randomUUID(),
+      title: fTitle.value.trim(),
+      details: fDetails.value.trim() || null,
+      status: fStatus.value,
+      color:  fColor.value || null,
+      due_date: fDue.value || null,
+      assignee: fAssignee.value.trim() || null,
+      created_at: new Date().toISOString(),
+    };
+    if(!payload.title){ fTitle.focus(); return; }
+
+    try{
+      if (USE_SUPABASE){
+        // --------- Supabase ----------
+        if (fId.value) {
+          const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id);
+          if (error) throw error;
+        } else {
+          payload.board_id = 'default'; // cambia si usas board por URL
+          const { error } = await supabase.from('tasks').insert(payload);
+          if (error) throw error;
+        }
+        // Re-consulta para pintar todo
+        const { data } = await supabase.from('tasks').select('*').order('created_at', {ascending:true});
+        render(data||[]);
+      } else {
+        // --------- Sin Supabase (en memoria) ----------
+        const idx = memory.tasks.findIndex(x => x.id === payload.id);
+        if (idx >= 0) memory.tasks[idx] = payload;
+        else memory.tasks.push(payload);
+        render(memory.tasks);
+      }
+      closeModal();
+    } catch(err){
+      alert('Error guardando: ' + err.message);
+    }
+  });
+
+  // Inicial: si usas Supabase, carga; si no, inicia vacío
+  (async function boot(){
+    if (USE_SUPABASE){
+      const { data, error } = await supabase.from('tasks').select('*').order('created_at',{ascending:true});
+      if (error) console.error(error);
+      render(data||[]);
+    } else {
+      render(memory.tasks);
+    }
+  })();
+
+  // ===== Plegado (si ya lo tenías) =====
+  const COLLAPSE_LIMIT = 4;
+  const collapsedState = { backlog:false, doing:false, done:true };
+  function setCollapsed(colKey, collapsed){
+    collapsedState[colKey] = collapsed;
+    const col = columns[colKey];
+    if (!col) return;
+    const cards = Array.from(col.querySelectorAll(':scope > .task'));
+    cards.forEach((el,i)=> el.style.display = (collapsed && i >= COLLAPSE_LIMIT) ? 'none' : '');
+    const btn = col.previousElementSibling?.querySelector(`[data-collapse="${colKey}"]`);
+    const hidden = Math.max(0, cards.length - COLLAPSE_LIMIT);
+    if (btn) btn.textContent = collapsed ? (hidden ? `Desplegar (${hidden})` : 'Desplegar') : 'Plegar';
+  }
+  function applyAutoCollapse(){ Object.keys(columns).forEach(k=> setCollapsed(k, !!collapsedState[k])); }
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-collapse]');
+    if(!btn) return;
+    const key = btn.getAttribute('data-collapse');
+    setCollapsed(key, !collapsedState[key]);
+  });
 </script>
+
 </body>
 </html>
