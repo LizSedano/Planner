@@ -1,375 +1,103 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full bg-slate-100 dark:bg-slate-900">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Planner Colaborativo — con Subtareas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planner Colaborativo</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="color-scheme" content="light dark" />
   <style>
-    :root { color-scheme: light dark; }
-    .glass { backdrop-filter: blur(6px); background: rgb(255 255 255 / 0.7); }
-    @media (prefers-color-scheme: dark){ .glass{ background: rgb(17 24 39 / 0.5);} }
-    .column { min-height: 420px; }
-    .handle { cursor: grab; }
-    .tab-btn{ padding:.375rem .75rem; border-radius:.75rem; border:1px solid rgb(203 213 225/.6); }
-    .tab-btn.active{ background:#0f172a; color:white; }
-    @media (prefers-color-scheme: dark){
-      .tab-btn{ border-color: rgb(71 85 105/.6); }
-      .tab-btn.active{ background:white; color:#0f172a; }
-    }
+    #taskModal { z-index: 50; }
   </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100">
-  <!--
-    ============================
-    🚀 Planner Colaborativo (HTML + Supabase) con SUBTAREAS
-    ============================
-    1) Crea un proyecto en https://supabase.com/ (plan gratis) y copia SUPABASE_URL y SUPABASE_ANON_KEY.
-    2) En la pestaña SQL ejecuta primero (si aún no tienes la tabla `tasks`):
+<body class="h-full">
+  <div class="min-h-full flex flex-col">
+    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-0 z-20 shadow-sm px-4 py-2 flex items-center justify-between">
+      <h1 class="text-lg font-bold text-slate-700 dark:text-slate-200">📌 Planner Colaborativo</h1>
+    </header>
 
-       create table if not exists public.tasks (
-         id uuid primary key default gen_random_uuid(),
-         board_id text not null,
-         title text not null,
-         details text,
-         status text not null default 'backlog',
-         due_date date,
-         assignee text,
-         created_at timestamp with time zone default now()
-       );
-       alter table public.tasks enable row level security;
-       create policy if not exists "Read tasks" on public.tasks for select using (true);
-       create policy if not exists "Insert tasks" on public.tasks for insert with check (true);
-       create policy if not exists "Update tasks" on public.tasks for update using (true) with check (true);
-       create policy if not exists "Delete tasks" on public.tasks for delete using (true);
-
-    3) Para SUBTAREAS, ejecuta:
-
-       create table if not exists public.subtasks (
-         id uuid primary key default gen_random_uuid(),
-         board_id text not null,
-         task_id uuid not null references public.tasks(id) on delete cascade,
-         title text not null,
-         done boolean not null default false,
-         created_at timestamp with time zone default now()
-       );
-       alter table public.subtasks enable row level security;
-       create policy if not exists "Read subtasks" on public.subtasks for select using (true);
-       create policy if not exists "Insert subtasks" on public.subtasks for insert with check (true);
-       create policy if not exists "Update subtasks" on public.subtasks for update using (true) with check (true);
-       create policy if not exists "Delete subtasks" on public.subtasks for delete using (true);
-
-    4) Pega tus credenciales abajo y sube este archivo a GitHub Pages/Netlify/Vercel.
-  -->
-
-  <header class="sticky top-0 z-10 glass border-b border-slate-200/60 dark:border-slate-700/40">
-    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="size-8 rounded-2xl bg-slate-900 dark:bg-slate-100"></div>
-        <div>
-          <h1 class="text-xl font-bold leading-tight">Planner Colaborativo</h1>
-          <p id="boardLabel" class="text-xs text-slate-600 dark:text-slate-300"></p>
+    <main class="flex-1 p-4 grid grid-cols-3 gap-4">
+      <!-- Columna Backlog -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
+          <button data-collapse="backlog" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
         </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="copyLinkBtn" class="px-3 py-1.5 text-sm rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90">Copiar enlace de este tablero</button>
-        <button id="newBoardBtn" class="px-3 py-1.5 text-sm rounded-xl border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60">Crear tablero nuevo</button>
-        <button id="newTaskBtn" class="px-3 py-1.5 text-sm rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Nueva tarea</button>
-      </div>
-    </div>
-  </header>
-
-  <main class="mx-auto max-w-7xl p-4">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <!-- Backlog -->
-      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
         <div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
       </section>
-      <!-- Doing -->
-      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
+
+      <!-- Columna Doing -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
+          <button data-collapse="doing" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+        </div>
         <div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
       </section>
-      <!-- Done -->
-      <section class="glass rounded-2xl p-3 border border-slate-200/60 dark:border-slate-700/40">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
+
+      <!-- Columna Done -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="sticky top-0 z-10 flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
+          <button data-collapse="done" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+        </div>
         <div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
       </section>
+    </main>
+
+    <!-- Botón flotante Nueva Tarea -->
+    <button id="btnNewTask" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg z-30">
+      ➕ Nueva tarea
+    </button>
+
+  </div>
+
+  <!-- Modal de Tareas -->
+  <div id="taskModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg w-96 p-4 space-y-3">
+      <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Tarea</h3>
+      <form id="taskForm" class="space-y-2">
+        <input type="hidden" id="fId">
+        <div>
+          <label class="block text-sm">Título</label>
+          <input id="fTitle" class="w-full rounded border px-2 py-1" required>
+        </div>
+        <div>
+          <label class="block text-sm">Detalles</label>
+          <textarea id="fDetails" class="w-full rounded border px-2 py-1"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm">Estado</label>
+          <select id="fStatus" class="w-full rounded border px-2 py-1">
+            <option value="backlog">Backlog</option>
+            <option value="doing">En curso</option>
+            <option value="done">Hecho</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Color</label>
+          <input type="color" id="fColor" class="w-12 h-8 border rounded">
+        </div>
+        <div>
+          <label class="block text-sm">Fecha límite</label>
+          <input type="date" id="fDue" class="w-full rounded border px-2 py-1">
+        </div>
+        <div>
+          <label class="block text-sm">Responsable</label>
+          <input id="fAssignee" class="w-full rounded border px-2 py-1">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
+          <button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
+        </div>
+      </form>
     </div>
-  </main>
+  </div>
 
-  <!-- Modal Crear/Editar -->
-  <dialog id="taskModal" class="rounded-2xl w-full max-w-2xl p-0 backdrop:bg-black/40">
-    <form method="dialog" class="glass border border-slate-200/60 dark:border-slate-700/40 rounded-2xl p-4">
-      <div class="flex items-start justify-between">
-        <h3 id="modalTitle" class="text-lg font-semibold">Nueva tarea</h3>
-        <button id="closeModal" class="text-slate-500">✕</button>
-      </div>
-      <div class="grid grid-cols-1 gap-3 mt-3">
-        <label class="text-sm">Título
-          <input id="fTitle" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Escribe el título..." required />
-        </label>
-        <div class="flex items-center gap-2 mt-1">
-          <label class="text-sm flex-1">Responsable
-            <input id="fAssignee" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Nombre o iniciales" />
-          </label>
-          <label class="text-sm w-44">Fecha límite
-            <input id="fDue" type="date" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" />
-          </label>
-          <label class="text-sm w-40">Estado
-            <select id="fStatus" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2"> 
-              <label class="text-sm w-40">Color
-  <input id="fColor" type="color"
-         class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-1 py-2"
-         value="#10b981" />
-</label>
-
-              <option value="backlog">Backlog</option>
-              <option value="doing">En curso</option>
-              <option value="done">Hecho</option>
-            </select>
-          </label>
-        </div>
-
-        <!-- Tabs Detalles / Subtareas -->
-        <div class="mt-2">
-          <div class="flex items-center gap-2">
-            <button type="button" id="tabDetailsBtn" class="tab-btn active">Detalles</button>
-            <button type="button" id="tabSubtasksBtn" class="tab-btn">Subtareas</button>
-          </div>
-          <div id="tabDetails" class="mt-3">
-            <label class="text-sm">Detalles
-              <textarea id="fDetails" rows="4" class="mt-1 w-full rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Notas, links, etc."></textarea>
-            </label>
-          </div>
-          <div id="tabSubtasks" class="mt-3 hidden">
-            <div class="flex items-center gap-2">
-              <input id="subtaskInput" class="flex-1 rounded-xl border border-slate-300/70 dark:border-slate-600 bg-transparent px-3 py-2" placeholder="Escribe una subtarea y presiona Enter" />
-              <button type="button" id="addSubtaskBtn" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Añadir</button>
-            </div>
-            <ul id="subtasksList" class="mt-2 space-y-2 max-h-56 overflow-auto"></ul>
-            <p id="subtasksEmpty" class="mt-2 text-sm text-slate-500 hidden">Aún no hay subtareas.</p>
-            <p id="subtasksHint" class="mt-2 text-sm text-slate-500 hidden">Guarda primero la tarea para poder añadir subtareas.</p>
-          </div>
-        </div>
-      </div>
-      <div class="mt-4 flex items-center justify-end gap-2">
-        <button id="deleteBtn" type="button" class="hidden px-3 py-1.5 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Eliminar</button>
-        <button id="saveBtn" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Guardar</button>
-      </div>
-    </form>
-  </dialog>
-
-  <template id="taskCardTpl">
-    <article class="task glass rounded-2xl border border-slate-200/60 dark:border-slate-700/40 p-3 handle" draggable="true">
-      <div class="flex items-center justify-between gap-2">
-        <h4 class="title font-semibold truncate"></h4>
-        <button class="editBtn text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60">Editar</button>
-      </div>
-      <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 space-y-1">
-        <div class="flex items-center gap-2"><span class="text-slate-400">👤</span><span class="assignee">—</span></div>
-        <div class="flex items-center gap-2"><span class="text-slate-400">🗓️</span><span class="due">—</span></div>
-      </div>
-      <p class="mt-2 text-sm details whitespace-pre-wrap hidden"></p>
-    </article>
-  </template>
-
-  <script type="module">
-    // 1) PEGA TUS CREDENCIALES
-    const SUPABASE_URL = "https://vdzslwuljwifougvwrxm.supabase.co"; // <- URL
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkenNsd3VsandpZm91Z3Z3cnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjM0MTIsImV4cCI6MjA3MTM5OTQxMn0._695RjBlFLllI--P5DdSxSEGrJ4odmWblkWn5AAlGP4";               // <- anon key
-
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // 2) UTILIDADES
-    const $ = (s, el=document)=> el.querySelector(s);
-    const $$ = (s, el=document)=> Array.from(el.querySelectorAll(s));
-    function uid(n=8){return crypto.getRandomValues(new Uint8Array(n)).reduce((a,b)=>a+("0"+b.toString(16)).slice(-2),"").slice(0,n)}
-    function getBoardId(){ const p=new URLSearchParams(location.search); let b=p.get('board'); if(!b){b=uid(10); p.set('board',b); history.replaceState({},'',`${location.pathname}?${p.toString()}`);} return b; }
-    const boardId = getBoardId();
-    $('#boardLabel').textContent = `Tablero: ${boardId}`;
-
-    const columns = { backlog: $('#col-backlog'), doing: $('#col-doing'), done: $('#col-done') };
-    const modal = $('#taskModal');
-    const modalTitle = $('#modalTitle');
-    const fTitle=$('#fTitle'), fAssignee=$('#fAssignee'), fDue=$('#fDue'), fStatus=$('#fStatus'), fDetails=$('#fDetails');
-    const fColor = document.querySelector('#fColor');
-    const saveBtn=$('#saveBtn'), deleteBtn=$('#deleteBtn');
-    let editingId = null;
-
-    // 3) CRUD TASKS
-    async function listTasks(){
-      const { data, error } = await supabase.from('tasks').select('*').eq('board_id', boardId).order('created_at', {ascending:true});
-      if(error){ console.error(error); return []; } return data;
-    }
-    async function insertTask(payload){ payload.board_id=boardId; const { data, error } = await supabase.from('tasks').insert(payload).select().single(); if(error) throw error; return data; }
-    async function updateTask(id, patch){ const { data, error } = await supabase.from('tasks').update(patch).eq('id', id).select().single(); if(error) throw error; return data; }
-    async function deleteTask(id){ const { error } = await supabase.from('tasks').delete().eq('id', id); if(error) throw error; }
-
-    // 4) CRUD SUBTASKS
-    async function listSubtasks(taskId){ const { data, error } = await supabase.from('subtasks').select('*').eq('board_id',boardId).eq('task_id',taskId).order('created_at',{ascending:true}); if(error){console.error(error); return [];} return data; }
-    async function insertSubtask(taskId, title){ const { data, error } = await supabase.from('subtasks').insert({board_id:boardId, task_id:taskId, title, done:false}).select().single(); if(error) throw error; return data; }
-    async function updateSubtask(id, patch){ const { data, error } = await supabase.from('subtasks').update(patch).eq('id',id).select().single(); if(error) throw error; return data; }
-    async function deleteSubtask(id){ const { error } = await supabase.from('subtasks').delete().eq('id',id); if(error) throw error; }
-
-    // 5) Render tareas
-    function taskCard(t){
-      const tpl=$('#taskCardTpl');
-      const node=tpl.content.firstElementChild.cloneNode(true);
-      node.dataset.id=t.id; $('.title',node).textContent=t.title; $('.assignee',node).textContent=t.assignee||'—'; $('.due',node).textContent=t.due_date? new Date(t.due_date).toLocaleDateString():'—';
-      if (t.color) {
-  node.style.borderLeft = `6px solid ${t.color}`;
-} else {
-  node.style.borderLeft = '6px solid transparent';
-}
-
-      const detailsEl=$('.details',node); if(t.details){ detailsEl.textContent=t.details; detailsEl.classList.remove('hidden'); }
-      $('.editBtn',node).addEventListener('click',()=> openModal(t));
-      node.addEventListener('dragstart',(e)=>{e.dataTransfer.setData('text/plain',t.id); requestAnimationFrame(()=> node.classList.add('opacity-50'));});
-      node.addEventListener('dragend',()=> node.classList.remove('opacity-50'));
-      return node;
-    }
-    function clearColumns(){ Object.values(columns).forEach(c=> c.innerHTML=''); }
-    function render(tasks){ clearColumns(); for(const t of tasks){ columns[t.status||'backlog'].appendChild(taskCard(t)); }
-    applyAutoCollapse();}
-
-    // 6) Drag & drop columnas
-    for(const col of Object.values(columns)){
-      col.addEventListener('dragover',e=>{ e.preventDefault(); col.classList.add('ring-2','ring-emerald-400/60'); });
-      col.addEventListener('dragleave',()=> col.classList.remove('ring-2','ring-emerald-400/60'));
-      col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('ring-2','ring-emerald-400/60'); const id=e.dataTransfer.getData('text/plain'); const newStatus=col.dataset.status; try{ await updateTask(id,{status:newStatus}); }catch(err){ console.error(err);} });
-    }
-
-    // 7) Modal + tabs + subtasks
-    function openModal(task=null){
-      const tabDetailsBtn=$('#tabDetailsBtn');
-      const tabSubtasksBtn=$('#tabSubtasksBtn');
-      const tabDetails=$('#tabDetails');
-      const tabSubtasks=$('#tabSubtasks');
-      const addSubtaskBtn=$('#addSubtaskBtn');
-      const subtaskInput=$('#subtaskInput');
-      const subtasksEmpty=$('#subtasksEmpty');
-      const subtasksList=$('#subtasksList');
-
-      function activate(tab){
-        if(tab==='details'){ tabDetailsBtn.classList.add('active'); tabSubtasksBtn.classList.remove('active'); tabDetails.classList.remove('hidden'); tabSubtasks.classList.add('hidden'); }
-        else { tabSubtasksBtn.classList.add('active'); tabDetailsBtn.classList.remove('active'); tabSubtasks.classList.remove('hidden'); tabDetails.classList.add('hidden'); }
-      }
-      tabDetailsBtn.onclick=()=> activate('details');
-      tabSubtasksBtn.onclick=()=> activate('subtasks');
-
-      async function drawSubtasks(taskId){
-        if(!taskId){ subtasksList.innerHTML=''; subtasksEmpty.classList.remove('hidden'); return; }
-        const items = await listSubtasks(taskId);
-        subtasksList.innerHTML='';
-        if(items.length===0) subtasksEmpty.classList.remove('hidden');
-        else subtasksEmpty.classList.add('hidden');
-        for(const s of items){
-          const li=document.createElement('li'); li.className='flex items-center gap-2 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/40';
-          const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!s.done; cb.onchange=()=> updateSubtask(s.id,{done:cb.checked});
-          const span=document.createElement('span'); span.contentEditable=true; span.className='flex-1 outline-none'; span.textContent=s.title; span.onblur=()=> updateSubtask(s.id,{title: span.textContent.trim()||s.title});
-          const del=document.createElement('button'); del.className='px-2 py-1 text-xs rounded-lg border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'; del.textContent='Eliminar'; del.onclick=()=> deleteSubtask(s.id);
-          li.append(cb,span,del); subtasksList.append(li);
-        }
-      }
-
-      if(task){
-        editingId = task.id;
-        modalTitle.textContent='Editar tarea';
-        fTitle.value=task.title||''; fAssignee.value=task.assignee||''; fDue.value=task.due_date||''; fStatus.value=task.status||'backlog'; fDetails.value=task.details||'';
-        deleteBtn.classList.remove('hidden');
-        $('#subtasksHint').classList.add('hidden'); addSubtaskBtn.disabled=false; subtaskInput.disabled=false;
-        drawSubtasks(editingId);
-        addSubtaskBtn.onclick = async ()=>{ const t=subtaskInput.value.trim(); if(!t) return; await insertSubtask(editingId,t); subtaskInput.value=''; };
-        subtaskInput.onkeydown = async (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const t=subtaskInput.value.trim(); if(!t) return; await insertSubtask(editingId,t); subtaskInput.value=''; } };
-      } else {
-        editingId = null;
-        modalTitle.textContent='Nueva tarea';
-        fTitle.value=''; fAssignee.value=''; fDue.value=''; fStatus.value='backlog'; fDetails.value=''; fColor.value = task.color || '#10b981';
-        deleteBtn.classList.add('hidden');
-        subtasksList.innerHTML=''; $('#subtasksEmpty').classList.add('hidden'); $('#subtasksHint').classList.remove('hidden'); addSubtaskBtn.disabled=true; subtaskInput.disabled=true;
-      }
-      activate('details');
-      modal.showModal();
-    }
-
-    $('#newTaskBtn').addEventListener('click',()=> openModal()); 
-    $('#closeModal').addEventListener('click',(e)=>{ e.preventDefault(); modal.close(); });
-
-    saveBtn.addEventListener('click', async (e)=>{
-      e.preventDefault();
-      const payload={ title:fTitle.value.trim(), assignee:fAssignee.value.trim()||null, due_date:fDue.value||null, status:fStatus.value, details:fDetails.value.trim()||null,  color: fColor.value || null, };
-      if(!payload.title) return;
-      try{
-        if(editingId){ await updateTask(editingId,payload); }
-        else { const r=await insertTask(payload); editingId=r.id; }
-        modal.close();
-      }catch(err){ alert('Error guardando: '+err.message); }
+  <script>
+    // Botón flotante abre modal
+    document.getElementById('btnNewTask').addEventListener('click', ()=>{
+      openModal();
     });
-
-    deleteBtn.addEventListener('click', async ()=>{
-      if(!editingId) return; if(!confirm('¿Eliminar esta tarea?')) return; try{ await deleteTask(editingId); modal.close(); }catch(err){ alert('Error eliminando: '+err.message); }
-    });
-
-    // 8) Realtime
-    async function boot(){
-      render(await listTasks());
-      supabase.channel('tasks-rt').on('postgres_changes', { event:'*', schema:'public', table:'tasks', filter:`board_id=eq.${boardId}` }, ()=> listTasks().then(render)).subscribe();
-      supabase.channel('subtasks-rt').on('postgres_changes', { event:'*', schema:'public', table:'subtasks', filter:`board_id=eq.${boardId}` }, ()=>{ if(editingId){ /* refrescar subtareas en modal si está abierto */ const m=$('#taskModal'); if(m.open){ const list=$('#subtasksList'); if(list) { (async()=>{ const items=await listSubtasks(editingId); list.innerHTML=''; const empty=$('#subtasksEmpty'); if(items.length===0) empty.classList.remove('hidden'); else empty.classList.add('hidden'); for(const s of items){ const li=document.createElement('li'); li.className='flex items-center gap-2 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/40'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!s.done; cb.onchange=()=> updateSubtask(s.id,{done:cb.checked}); const span=document.createElement('span'); span.contentEditable=true; span.className='flex-1 outline-none'; span.textContent=s.title; span.onblur=()=> updateSubtask(s.id,{title: span.textContent.trim()||s.title}); const del=document.createElement('button'); del.className='px-2 py-1 text-xs rounded-lg border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'; del.textContent='Eliminar'; del.onclick=()=> deleteSubtask(s.id); li.append(cb,span,del); list.append(li);} })(); } } } }).subscribe();
-    }
-
-    // 9) Compartir enlace y tableros
-    $('#copyLinkBtn').addEventListener('click', async ()=>{ await navigator.clipboard.writeText(location.href); const b=$('#copyLinkBtn'); const old=b.textContent; b.textContent='¡Enlace copiado!'; setTimeout(()=> b.textContent=old,1500); });
-    $('#newBoardBtn').addEventListener('click',()=>{ const p=new URLSearchParams(location.search); p.set('board', uid(10)); location.search=p.toString(); });
-// ==========================
-// Colapso de columnas largas
-// ==========================
-const COLLAPSE_LIMIT = 5; // cuántas tarjetas se ven cuando está plegado
-const collapsedState = { backlog: false, doing: false, done: true }; // por defecto 'Hecho' plegado
-
-function setCollapsed(colKey, collapsed){
-  collapsedState[colKey] = collapsed;
-  const col = columns[colKey];
-  if(!col) return;
-  const cards = Array.from(col.children);
-  cards.forEach((el, i) => {
-    el.style.display = (collapsed && i >= COLLAPSE_LIMIT) ? "none" : "";
-  });
-
-  // Botón (lo creamos si no existe)
-  let btn = document.querySelector(`[data-collapse="${colKey}"]`);
-  if(!btn){
-    const header = col.parentElement.querySelector("h2");
-    if(header){
-      btn = document.createElement("button");
-      btn.dataset.collapse = colKey;
-      btn.className = "text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600 hover:bg-slate-50/60 dark:hover:bg-slate-800/60";
-      header.parentElement.classList.add("flex","items-center","justify-between");
-      header.parentElement.appendChild(btn);
-    }
-  }
-  if(btn){
-    const hidden = Math.max(0, cards.length - COLLAPSE_LIMIT);
-    btn.textContent = collapsed ? (hidden ? `Desplegar (${hidden})` : "Desplegar") : "Plegar";
-  }
-}
-
-function applyAutoCollapse(){
-  Object.keys(columns).forEach(k => setCollapsed(k, !!collapsedState[k]));
-}
-
-// Toggle al clic
-document.addEventListener("click", (e)=>{
-  const btn = e.target.closest("[data-collapse]");
-  if(!btn) return;
-  const key = btn.getAttribute("data-collapse");
-  setCollapsed(key, !collapsedState[key]);
-});
-
-    boot();
   </script>
 </body>
 </html>
