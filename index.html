@@ -274,57 +274,27 @@
     }
 
     // === Abrir / Cerrar modal (con subtareas integradas)
-    function openModal(task = null){
-      form.reset();
-      fId.value = task?.id || '';
-      fTitle.value = task?.title || '';
-      fDetails.value = task?.details || '';
-      fStatus.value = task?.status || 'backlog';
-      fColor.value = task?.color || '#10b981';
-      fDue.value = task?.due_date || '';
-      fAssignee.value = task?.assignee || '';
-      fStatus.disabled = false;
+  function openModal(task = null){
+  form.reset();
+  fId.value       = task?.id || '';
+  fTitle.value    = task?.title || '';
+  fDetails.value  = task?.details || '';
+  fStatus.value   = task?.status || 'backlog';
+  fColor.value    = task?.color || '#10b981';
+  fDue.value      = task?.due_date || '';
+  fAssignee.value = task?.assignee || '';
+  fStatus.disabled = false;
 
-      // Subtareas
-      const list = document.getElementById('subtasksList');
-      const empty = document.getElementById('subtasksEmpty');
-      list.innerHTML = '';
-      empty.classList.add('hidden');
-      addSubtaskBtn.onclick = null;
-      subtaskInput.onkeydown = null;
-
-      if (task && task.id) {
-        subtasksHint.classList.add('hidden');
-        addSubtaskBtn.disabled = false;
-        subtaskInput.disabled  = false;
-
-        renderSubtasks(task.id);
-
-        addSubtaskBtn.onclick = async ()=>{
-          const t = subtaskInput.value.trim();
-          if(!t) return;
-          await insertSubtask(task.id, t);
-          subtaskInput.value = '';
-          renderSubtasks(task.id);
-        };
-
-        subtaskInput.onkeydown = async (e)=>{
-          if(e.key === 'Enter'){
-            e.preventDefault();
-            const t = subtaskInput.value.trim();
-            if(!t) return;
-            await insertSubtask(task.id, t);
-            subtaskInput.value = '';
-            renderSubtasks(task.id);
-          }
-        };
-      } else {
-        subtasksHint.classList.remove('hidden');
-        addSubtaskBtn.disabled = true;
-        subtaskInput.disabled  = true;
-      }
-
-      modal.classList.remove('hidden');
+   function openModal(task = null){
+  form.reset();
+  fId.value       = task?.id || '';
+  fTitle.value    = task?.title || '';
+  fDetails.value  = task?.details || '';
+  fStatus.value   = task?.status || 'backlog';
+  fColor.value    = task?.color || '#10b981';
+  fDue.value      = task?.due_date || '';
+  fAssignee.value = task?.assignee || '';
+  fStatus.disabled = false;
     }
     function closeModal(){ modal.classList.add('hidden'); }
 
