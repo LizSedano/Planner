@@ -273,9 +273,11 @@
       }
     }
 
-    // === Abrir / Cerrar modal (con subtareas integradas)
-  function openModal(task = null){
+// === Abrir / Cerrar modal (con subtareas integradas)
+function openModal(task = null){
   form.reset();
+
+  // Rellenar campos
   fId.value       = task?.id || '';
   fTitle.value    = task?.title || '';
   fDetails.value  = task?.details || '';
@@ -285,18 +287,51 @@
   fAssignee.value = task?.assignee || '';
   fStatus.disabled = false;
 
-   function openModal(task = null){
-  form.reset();
-  fId.value       = task?.id || '';
-  fTitle.value    = task?.title || '';
-  fDetails.value  = task?.details || '';
-  fStatus.value   = task?.status || 'backlog';
-  fColor.value    = task?.color || '#10b981';
-  fDue.value      = task?.due_date || '';
-  fAssignee.value = task?.assignee || '';
-  fStatus.disabled = false;
-    }
-    function closeModal(){ modal.classList.add('hidden'); }
+  // Mostrar modal
+  modal.classList.remove('hidden');
+
+  // Subtareas: si hay id cargamos, si no mostramos hint
+  const hasId = !!fId.value;
+  document.getElementById('subtasksEmpty').classList.add('hidden');
+  document.getElementById('subtasksHint').classList.toggle('hidden', hasId);
+  document.getElementById('subtasksList').innerHTML = '';
+
+  if (hasId) {
+    renderSubtasks(fId.value);
+  }
+}
+
+function closeModal(){
+  modal.classList.add('hidden');
+}
+
+// === Eventos para subtareas ===
+addSubtaskBtn.addEventListener('click', async () => {
+  const taskId = fId.value;
+  const text = subtaskInput.value.trim();
+  if (!taskId){
+    // No hay tarea guardada todavía
+    document.getElementById('subtasksHint').classList.remove('hidden');
+    return;
+  }
+  if (!text) return;
+  try {
+    await insertSubtask(taskId, text);
+    subtaskInput.value = '';
+    await renderSubtasks(taskId);
+  } catch (err){
+    alert('Error al añadir subtarea: ' + err.message);
+  }
+});
+
+// Enter en input de subtarea
+subtaskInput.addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addSubtaskBtn.click();
+  }
+});
+
 
     // === Guardar tarea
     form.addEventListener('submit', async (e)=>{
