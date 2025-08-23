@@ -198,21 +198,85 @@
         return memory.subtasks[taskId] || [];
       }
     }
+async function renderSubtasks(taskId){
+  const list = document.getElementById('subtasksList');
+  const empty = document.getElementById('subtasksEmpty');
+  list.innerHTML = '';
+
+  if (!taskId) { empty.classList.remove('hidden'); return; }
+
+  const { data, error } = await supabase
+    .from('subtasks')
+    .select('id, title, done')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true }); // si no tienes created_at, quita esta línea
+
+  if (error){
+    list.innerHTML = `<li class="text-red-500 text-sm">Error cargando subtareas</li>`;
+    return;
+  }
+
+  if (!data || data.length === 0){
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const frag = document.createDocumentFragment();
+  for (const s of data){
+    const li = document.createElement('li');
+    li.className = 'flex items-center gap-2 py-1';
+    li.dataset.id = s.id;
+    li.innerHTML = `
+      <input type="checkbox" class="subtask-toggle" ${s.done ? 'checked' : ''}>
+      <span class="flex-1 ${s.done ? 'line-through opacity-60' : ''}">${escapeHtml(s.title)}</span>
+      <button type="button" class="subtask-del text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200">Eliminar</button>
+    `;
+    frag.appendChild(li);
+  }
+  list.appendChild(frag);
+}
+
+// Pequeña utilidad para evitar problemas con caracteres especiales
+function escapeHtml(s){
+  return (s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
 
     async function insertSubtask(taskId, title){
-      if (USE_SUPABASE){
-        const { data, error } = await supabase
-          .from('subtasks').insert({ task_id: taskId, title, done:false })
-          .select().single();
-        if (error) throw error;
-        return data;
-      } else {
-        const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
-        memory.subtasks[taskId] = memory.subtasks[taskId] || [];
-        memory.subtasks[taskId].push(item);
-        return item;
-      }
-    }
+  if (USE_SUPABASE){
+    // 1) Obtener el board_id desde la tarea
+    const { data: taskRow, error: taskErr } = await supabase
+      .from('tasks')
+      .select('id, board_id')
+      .eq('id', taskId)
+      .single();
+
+    if (taskErr) throw taskErr;
+    if (!taskRow?.board_id) throw new Error('No se encontró board_id de la tarea');
+
+    // 2) Insertar subtarea con board_id + task_id
+    const { data, error } = await supabase
+      .from('subtasks')
+      .insert({
+        board_id: taskRow.board_id,
+        task_id : taskId,
+        title   : title,
+        done    : false
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+
+  } else {
+    const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
+    memory.subtasks[taskId] = memory.subtasks[taskId] || [];
+    memory.subtasks[taskId].push(item);
+    return item;
+  }
+}
+
 
     async function updateSubtask(id, patch){
       if (USE_SUPABASE){
@@ -227,6 +291,19 @@
         }
       }
     }
+async function deleteSubtask(id){
+  if (USE_SUPABASE){
+    const { error } = await supabase.from('subtasks').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  } else {
+    for (const [taskId, arr] of Object.entries(memory.subtasks)){
+      const i = arr.findIndex(s => s.id === id);
+      if (i >= 0){ arr.splice(i, 1); return true; }
+    }
+    return true;
+  }
+}
 
     async function deleteSubtask(id){
       if (USE_SUPABASE){
@@ -323,7 +400,42 @@ addSubtaskBtn.addEventListener('click', async () => {
     alert('Error al añadir subtarea: ' + err.message);
   }
 });
+const subtasksListEl = document.getElementById('subtasksList');
 
+// Marcar / desmarcar como hecha
+subtasksListEl.addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('subtask-toggle')) return;
+  const li = e.target.closest('li');
+  const id = li.dataset.id;
+  const done = e.target.checked;
+  try {
+    await updateSubtask(id, { done });
+    const span = li.querySelector('span');
+    span.classList.toggle('line-through', done);
+    span.classList.toggle('opacity-60', done);
+  } catch (err){
+    alert('No se pudo actualizar la subtarea: ' + err.message);
+    e.target.checked = !done; // revertir visualmente
+  }
+});
+
+// Eliminar subtarea
+subtasksListEl.addEventListener('click', async (e) => {
+  if (!e.target.classList.contains('subtask-del')) return;
+  const li = e.target.closest('li');
+  const id = li.dataset.id;
+  if (!confirm('¿Eliminar esta subtarea?')) return;
+
+  try {
+    await deleteSubtask(id);
+    li.remove();
+    if (!subtasksListEl.children.length){
+      document.getElementById('subtasksEmpty').classList.remove('hidden');
+    }
+  } catch (err){
+    alert('No se pudo eliminar: ' + err.message);
+  }
+});
 // Enter en input de subtarea
 subtaskInput.addEventListener('keydown', async (e) => {
   if (e.key === 'Enter') {
