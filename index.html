@@ -1,435 +1,413 @@
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-slate-100 dark:bg-slate-900">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Planner Colaborativo</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-#taskModal { z-index: 50; }
-.column-header { position: sticky; top: 0; z-index: 10; background-color: rgba(255,255,255,0.8); backdrop-filter: blur(6px); }
-.dark .column-header { background-color: rgba(15,23,42,0.8); }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planner Colaborativo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #taskModal { z-index: 50; }
+    .column-header { position: sticky; top: 0; z-index: 10; background-color: rgba(255,255,255,0.8); backdrop-filter: blur(6px); }
+    .dark .column-header { background-color: rgba(15,23,42,0.8); }
+    .fade-bottom { position: relative; }
+    .fade-bottom::after { content:""; position:absolute; left:0; right:0; bottom:0; height:48px; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.9)); pointer-events:none; }
+    @media (prefers-color-scheme: dark){ .fade-bottom::after{ background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(2,6,23,.9)); } }
+  </style>
 </head>
 <body class="h-full">
-<div class="min-h-full flex flex-col">
-<header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-0 z-20 shadow-sm px-4 py-2 flex items-center justify-between">
-<h1 class="text-lg font-bold text-slate-700 dark:text-slate-200">📌 Planner Colaborativo</h1>
-</header>
+  <div class="min-h-full flex flex-col">
+    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-0 z-20 shadow-sm px-4 py-2 flex items-center justify-between">
+      <h1 class="text-lg font-bold text-slate-700 dark:text-slate-200">📌 Planner Colaborativo</h1>
+      <button id="btnNewTask" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-3 py-2 rounded-lg shadow">
+        ➕ Nueva tarea
+      </button>
+    </header>
 
+    <main class="flex-1 p-4 grid grid-cols-3 gap-4">
+      <!-- Backlog -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
+          <button data-collapse="backlog" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+        </div>
+        <div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
+      </section>
 
-<main class="flex-1 p-4 grid grid-cols-3 gap-4">
-<!-- Columna Backlog -->
-<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
-<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Backlog</h2>
-<button data-collapse="backlog" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-</div>
-<div id="col-backlog" class="column mt-2 space-y-2" data-status="backlog"></div>
-</section>
+      <!-- Doing -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
+          <button data-collapse="doing" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+        </div>
+        <div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
+      </section>
 
-
-<!-- Columna Doing -->
-<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
-<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">En curso</h2>
-<button data-collapse="doing" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-</div>
-<div id="col-doing" class="column mt-2 space-y-2" data-status="doing"></div>
-</section>
-
-
-<!-- Columna Done -->
-<section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
-<div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
-<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
-<button data-collapse="done" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
-</div>
-<div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
-</section>
-</main>
-
-
-<!-- Botón flotante Nueva Tarea -->
-<button id="btnNewTask" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg z-30">
-➕ Nueva tarea
-</button>
-
-
-</div>
-
-
-<!-- Modal de Tareas -->
-<div id="taskModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
-<div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg w-96 p-4 space-y-3">
-<h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Tarea</h3>
-<form id="taskForm" class="space-y-2">
-<input type="hidden" id="fId">
-<div>
-<label class="block text-sm">Título</label>
-<input id="fTitle" class="w-full rounded border px-2 py-1" required>
-</div>
-<div>
-<label class="block text-sm">Detalles</label>
-<textarea id="fDetails" class="w-full rounded border px-2 py-1"></textarea>
-</div>
-<div>
-<label class="block text-sm">Estado</label>
-<select id="fStatus" class="w-full rounded border px-2 py-1">
-<option value="backlog">Backlog</option>
-<option value="doing">En curso</option>
-<option value="done">Hecho</option>
-</select>
-</div>
-<div>
-<label class="block text-sm">Color</label>
-<input type="color" id="fColor" class="w-12 h-8 border rounded">
-</div>
-<div>
-<label class="block text-sm">Fecha límite</label>
-<input type="date" id="fDue" class="w-full rounded border px-2 py-1">
-</div>
-<div>
-<label class="block text-sm">Responsable</label>
-<input id="fAssignee" class="w-full rounded border px-2 py-1">
-</div>
-  <!-- Subtareas -->
-<div class="mt-2">
-  <label class="block text-sm font-medium">Subtareas</label>
-  <div class="flex gap-2 mt-1">
-    <input id="subtaskInput" class="flex-1 rounded border px-2 py-1" placeholder="Escribe una subtarea y presiona Enter" />
-    <button type="button" id="addSubtaskBtn" class="px-2 py-1 rounded bg-emerald-500 text-white">Añadir</button>
+      <!-- Done -->
+      <section class="bg-white dark:bg-slate-800 rounded-xl shadow p-2 flex flex-col overflow-y-auto">
+        <div class="column-header flex items-center justify-between rounded-xl px-2 py-1">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Hecho</h2>
+          <button data-collapse="done" class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Plegar</button>
+        </div>
+        <div id="col-done" class="column mt-2 space-y-2" data-status="done"></div>
+      </section>
+    </main>
   </div>
-  <ul id="subtasksList" class="mt-2 space-y-2 max-h-48 overflow-auto"></ul>
-  <p id="subtasksEmpty" class="text-xs text-slate-500 mt-1 hidden">Aún no hay subtareas.</p>
-  <p id="subtasksHint" class="text-xs text-slate-500 mt-1 hidden">Guarda primero la tarea para poder añadir subtareas.</p>
-</div>
 
-<div class="flex justify-end gap-2 pt-2">
-<button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
-<button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
-</div>
-</form>
-</div>
-</div>
+  <!-- Modal -->
+  <div id="taskModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg w-96 p-4 space-y-3">
+      <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Tarea</h3>
+      <form id="taskForm" class="space-y-2">
+        <input type="hidden" id="fId">
+        <div>
+          <label class="block text-sm">Título</label>
+          <input id="fTitle" class="w-full rounded border px-2 py-1" required>
+        </div>
+        <div>
+          <label class="block text-sm">Detalles</label>
+          <textarea id="fDetails" class="w-full rounded border px-2 py-1"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm">Estado</label>
+          <select id="fStatus" class="w-full rounded border px-2 py-1">
+            <option value="backlog">Backlog</option>
+            <option value="doing">En curso</option>
+            <option value="done">Hecho</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Color</label>
+          <input type="color" id="fColor" class="w-12 h-8 border rounded" value="#10b981">
+        </div>
+        <div>
+          <label class="block text-sm">Fecha límite</label>
+          <input type="date" id="fDue" class="w-full rounded border px-2 py-1">
+        </div>
+        <div>
+          <label class="block text-sm">Responsable</label>
+          <input id="fAssignee" class="w-full rounded border px-2 py-1">
+        </div>
 
+        <!-- Subtareas -->
+        <div class="mt-2">
+          <label class="block text-sm font-medium">Subtareas</label>
+          <div class="flex gap-2 mt-1">
+            <input id="subtaskInput" class="flex-1 rounded border px-2 py-1" placeholder="Escribe una subtarea y presiona Enter" />
+            <button type="button" id="addSubtaskBtn" class="px-2 py-1 rounded bg-emerald-500 text-white">Añadir</button>
+          </div>
+          <ul id="subtasksList" class="mt-2 space-y-2 max-h-48 overflow-auto"></ul>
+          <p id="subtasksEmpty" class="text-xs text-slate-500 mt-1 hidden">Aún no hay subtareas.</p>
+          <p id="subtasksHint" class="text-xs text-slate-500 mt-1 hidden">Guarda primero la tarea para poder añadir subtareas.</p>
+        </div>
 
-<script type="module">
-  // ================
-  // (Opcional) Supabase
-  // ================
-  const USE_SUPABASE = true; // <- pon true si vas a usar Supabase en este archivo
-  let supabase = null;
-  if (USE_SUPABASE) {
-    const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
-    const SUPABASE_ANON_KEY = "TU-ANON-KEY";
-    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
+          <button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-  // Estado en memoria (si no usas Supabase)
-  const memory = { tasks: [] };
+  <script type="module">
+    // === Configuración de datos ===
+    const USE_SUPABASE = true;              // ← pon true/false según uses BD
+    const BOARD_ID = 'default';             // ← cámbialo si usas boards
 
-  // Columnas
-  const columns = {
-    backlog: document.getElementById('col-backlog'),
-    doing:   document.getElementById('col-doing'),
-    done:    document.getElementById('col-done'),
-  };
-
-  // Modal & campos
- const subtaskInput = document.getElementById('subtaskInput');
-const addSubtaskBtn = document.getElementById('addSubtaskBtn');
-const subtasksHint  = document.getElementById('subtasksHint');
-
-  const modal = document.getElementById('taskModal');
-  const form  = document.getElementById('taskForm');
-  const fId   = document.getElementById('fId');
-  const fTitle= document.getElementById('fTitle');
-  const fDetails = document.getElementById('fDetails');
-  const fStatus  = document.getElementById('fStatus');
-  const fColor   = document.getElementById('fColor');
-  const fDue     = document.getElementById('fDue');
-  const fAssignee= document.getElementById('fAssignee');
-
-  document.getElementById('btnNewTask').addEventListener('click', () => openModal());
-  document.getElementById('btnCancel').addEventListener('click', closeModal);
-  modal.addEventListener('click', (e)=> { if(e.target === modal) closeModal(); });
-  document.addEventListener('keydown', (e)=> { if(e.key === 'Escape') closeModal(); });
-
-  // Tarjeta visual
-  function taskCard(t){
-    const card = document.createElement('article');
-    card.className = 'task bg-white dark:bg-slate-800 rounded-xl shadow p-3';
-    if (t.color) card.style.borderLeft = `6px solid ${t.color}`;
-    card.innerHTML = `
-      <div class="flex items-center justify-between">
-        <h4 class="font-semibold">${escapeHtml(t.title)}</h4>
-        <button class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Editar</button>
-      </div>
-      <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 space-y-1">
-        <div class="flex items-center gap-2"><span class="text-slate-400">👤</span><span>${escapeHtml(t.assignee||'—')}</span></div>
-        <div class="flex items-center gap-2"><span class="text-slate-400">🗓️</span><span>${t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</span></div>
-      </div>
-      ${t.details ? `<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t.details)}</p>` : ''}
-    `;
-    // Editar
-    card.querySelector('button').onclick = () => openModal(t);
-    return card;
-  }
-
-  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
-
-  // Render de todas las tareas
-  function clearColumns(){ Object.values(columns).forEach(c => c.innerHTML = ''); }
-  function render(tasks){
-    clearColumns();
-    for (const t of tasks) {
-      const col = columns[t.status || 'backlog'] || columns.backlog;
-      col.appendChild(taskCard(t));
+    // Supabase (solo si USE_SUPABASE === true)
+    let supabase = null;
+    if (USE_SUPABASE) {
+      const SUPABASE_URL = "https://vdzslwuljwifougvwrxm.supabase.co"; // ← PON TU URL
+      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkenNsd3VsandpZm91Z3Z3cnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjM0MTIsImV4cCI6MjA3MTM5OTQxMn0._695RjBlFLllI--P5DdSxSEGrJ4odmWblkWn5AAlGP4";                // ← PON TU ANON KEY
+      const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm");
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
-    applyAutoCollapse(); // si ya usas el plegado
-  }
-// ===== SUBTAREAS =====
-async function listSubtasks(taskId){
-  if (USE_SUPABASE){
-    const { data, error } = await supabase
-      .from('subtasks').select('*')
-      .eq('task_id', taskId)
-      .order('created_at', { ascending: true });
-    if (error) { console.error(error); return []; }
-    return data || [];
-  } else {
-    return memory.subtasks[taskId] || [];
-  }
-}
 
-async function insertSubtask(taskId, title){
-  if (USE_SUPABASE){
-    const { data, error } = await supabase
-      .from('subtasks').insert({ task_id: taskId, title, done:false })
-      .select().single();
-    if (error) throw error;
-    return data;
-  } else {
-    const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
-    memory.subtasks[taskId] = memory.subtasks[taskId] || [];
-    memory.subtasks[taskId].push(item);
-    return item;
-  }
-}
+    // Estado en memoria si no hay BD
+    const memory = { tasks: [], subtasks: {} };
 
-async function updateSubtask(id, patch){
-  if (USE_SUPABASE){
-    const { data, error } = await supabase
-      .from('subtasks').update(patch).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  } else {
-    for (const arr of Object.values(memory.subtasks)){
-      const i = arr.findIndex(s => s.id === id);
-      if (i >= 0) { Object.assign(arr[i], patch); return arr[i]; }
-    }
-  }
-}
-
-async function deleteSubtask(id){
-  if (USE_SUPABASE){
-    const { error } = await supabase.from('subtasks').delete().eq('id', id);
-    if (error) throw error;
-  } else {
-    for (const key of Object.keys(memory.subtasks)){
-      memory.subtasks[key] = memory.subtasks[key].filter(s => s.id !== id);
-    }
-  }
-}
-
-async function renderSubtasks(taskId){
-  const list = document.getElementById('subtasksList');
-  const empty = document.getElementById('subtasksEmpty');
-  list.innerHTML = '';
-  if (!taskId){ empty.classList.add('hidden'); return; }
-
-  const items = await listSubtasks(taskId);
-  if (items.length === 0) empty.classList.remove('hidden'); else empty.classList.add('hidden');
-
-  for (const s of items){
-    const li = document.createElement('li');
-    li.className = 'flex items-center gap-2 p-2 rounded border';
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!s.done;
-    cb.onchange = ()=> updateSubtask(s.id, { done: cb.checked });
-
-    const span = document.createElement('span');
-    span.contentEditable = true;
-    span.className = 'flex-1 outline-none';
-    span.textContent = s.title;
-    span.onblur = ()=> updateSubtask(s.id, { title: span.textContent.trim() || s.title });
-
-    const del = document.createElement('button');
-    del.className = 'text-xs px-2 py-1 rounded border border-red-300 text-red-600';
-    del.textContent = 'Eliminar';
-    del.onclick = ()=> deleteSubtask(s.id).then(()=> renderSubtasks(taskId));
-
-    li.append(cb, span, del);
-    list.append(li);
-  }
-}
-
-  // Abrir/Cerrar modal
-  function openModal(task=null){
-    form.reset();
-    fId.value = task?.id || '';
-    fTitle.value = task?.title || '';
-    fDetails.value = task?.details || '';
-    fStatus.value = task?.status || 'backlog';
-    fColor.value = task?.color || '#10b981';
-    fDue.value = task?.due_date || '';
-    fAssignee.value = task?.assignee || '';
-    fStatus.disabled = false;
-    modal.classList.remove('hidden');
-  }
-  function openModal(task=null){
-  form.reset();
-  fId.value = task?.id || '';
-  fTitle.value = task?.title || '';
-  fDetails.value = task?.details || '';
-  fStatus.value = task?.status || 'backlog';
-  fColor.value = task?.color || '#10b981';
-  fDue.value = task?.due_date || '';
-  fAssignee.value = task?.assignee || '';
-  fStatus.disabled = false;
-
-  modal.classList.remove('hidden');
-}
-  // Subtareas
-const subtaskInput = document.getElementById('subtaskInput');
-const addSubtaskBtn = document.getElementById('addSubtaskBtn');
-const subtasksHint  = document.getElementById('subtasksHint');
-
-if (task && task.id) {
-  subtasksHint.classList.add('hidden');
-  addSubtaskBtn.disabled = false;
-  subtaskInput.disabled  = false;
-
-  // Cargar subtareas existentes
-  renderSubtasks(task.id);
-
-  // Añadir nuevas
-  addSubtaskBtn.onclick = async ()=>{
-    const t = subtaskInput.value.trim();
-    if(!t) return;
-    await insertSubtask(task.id, t);
-    subtaskInput.value = '';
-    renderSubtasks(task.id);
-  };
-  subtaskInput.onkeydown = async (e)=>{
-    if(e.key === 'Enter'){
-      e.preventDefault();
-      const t = subtaskInput.value.trim();
-      if(!t) return;
-      await insertSubtask(task.id, t);
-      subtaskInput.value = '';
-      renderSubtasks(task.id);
-    }
-  };
-} else {
-  // Si todavía no existe la tarea (nuevo registro)
-  document.getElementById('subtasksList').innerHTML = '';
-  document.getElementById('subtasksEmpty').classList.add('hidden');
-  subtasksHint.classList.remove('hidden');
-  addSubtaskBtn.disabled = true;
-  subtaskInput.disabled  = true;
-}
-
-
-  function closeModal(){ modal.classList.add('hidden'); }
-
-  // Guardar
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const payload = {
-      id: fId.value || crypto.randomUUID(),
-      title: fTitle.value.trim(),
-      details: fDetails.value.trim() || null,
-      status: fStatus.value,
-      color:  fColor.value || null,
-      due_date: fDue.value || null,
-      assignee: fAssignee.value.trim() || null,
-      created_at: new Date().toISOString(),
+    // Columnas
+    const columns = {
+      backlog: document.getElementById('col-backlog'),
+      doing:   document.getElementById('col-doing'),
+      done:    document.getElementById('col-done'),
     };
-    if(!payload.title){ fTitle.focus(); return; }
 
-    try{
+    // Modal y campos
+    const modal = document.getElementById('taskModal');
+    const form  = document.getElementById('taskForm');
+    const fId   = document.getElementById('fId');
+    const fTitle= document.getElementById('fTitle');
+    const fDetails = document.getElementById('fDetails');
+    const fStatus  = document.getElementById('fStatus');
+    const fColor   = document.getElementById('fColor');
+    const fDue     = document.getElementById('fDue');
+    const fAssignee= document.getElementById('fAssignee');
+
+    const subtaskInput = document.getElementById('subtaskInput');
+    const addSubtaskBtn = document.getElementById('addSubtaskBtn');
+    const subtasksHint  = document.getElementById('subtasksHint');
+
+    // Botones globales
+    document.getElementById('btnNewTask').addEventListener('click', () => openModal());
+    document.getElementById('btnCancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e)=> { if(e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e)=> { if(e.key === 'Escape') closeModal(); });
+
+    // ==== Render de tarjetas ====
+    function taskCard(t){
+      const card = document.createElement('article');
+      card.className = 'task bg-white dark:bg-slate-800 rounded-xl shadow p-3';
+      if (t.color) card.style.borderLeft = `6px solid ${t.color}`;
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <h4 class="font-semibold">${escapeHtml(t.title)}</h4>
+          <button class="text-xs px-2 py-1 rounded-lg border border-slate-300/60 dark:border-slate-600">Editar</button>
+        </div>
+        <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 space-y-1">
+          <div class="flex items-center gap-2"><span class="text-slate-400">👤</span><span>${escapeHtml(t.assignee||'—')}</span></div>
+          <div class="flex items-center gap-2"><span class="text-slate-400">🗓️</span><span>${t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</span></div>
+        </div>
+        ${t.details ? `<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t.details)}</p>` : ''}
+      `;
+      card.querySelector('button').onclick = () => openModal(t);
+      return card;
+    }
+
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+    function clearColumns(){ Object.values(columns).forEach(c => c.innerHTML = ''); }
+    function render(tasks){
+      clearColumns();
+      for (const t of tasks) {
+        const col = columns[t.status || 'backlog'] || columns.backlog;
+        col.appendChild(taskCard(t));
+      }
+      applyAutoCollapse();
+    }
+
+    // ===== SUBTAREAS (CRUD) =====
+    async function listSubtasks(taskId){
       if (USE_SUPABASE){
-        // --------- Supabase ----------
-        if (fId.value) {
-          const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id);
-          if (error) throw error;
-        } else {
-          payload.board_id = 'default'; // cambia si usas board por URL
-          const { error } = await supabase.from('tasks').insert(payload);
-          if (error) throw error;
+        const { data, error } = await supabase
+          .from('subtasks').select('*')
+          .eq('task_id', taskId)
+          .order('created_at', { ascending: true });
+        if (error) { console.error(error); return []; }
+        return data || [];
+      } else {
+        return memory.subtasks[taskId] || [];
+      }
+    }
+
+    async function insertSubtask(taskId, title){
+      if (USE_SUPABASE){
+        const { data, error } = await supabase
+          .from('subtasks').insert({ task_id: taskId, title, done:false })
+          .select().single();
+        if (error) throw error;
+        return data;
+      } else {
+        const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
+        memory.subtasks[taskId] = memory.subtasks[taskId] || [];
+        memory.subtasks[taskId].push(item);
+        return item;
+      }
+    }
+
+    async function updateSubtask(id, patch){
+      if (USE_SUPABASE){
+        const { data, error } = await supabase
+          .from('subtasks').update(patch).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+      } else {
+        for (const arr of Object.values(memory.subtasks)){
+          const i = arr.findIndex(s => s.id === id);
+          if (i >= 0) { Object.assign(arr[i], patch); return arr[i]; }
         }
-        // Re-consulta para pintar todo
-        const { data } = await supabase.from('tasks').select('*').order('created_at', {ascending:true});
+      }
+    }
+
+    async function deleteSubtask(id){
+      if (USE_SUPABASE){
+        const { error } = await supabase.from('subtasks').delete().eq('id', id);
+        if (error) throw error;
+      } else {
+        for (const key of Object.keys(memory.subtasks)){
+          memory.subtasks[key] = memory.subtasks[key].filter(s => s.id !== id);
+        }
+      }
+    }
+
+    async function renderSubtasks(taskId){
+      const list = document.getElementById('subtasksList');
+      const empty = document.getElementById('subtasksEmpty');
+      list.innerHTML = '';
+      if (!taskId){ empty.classList.add('hidden'); return; }
+
+      const items = await listSubtasks(taskId);
+      if (items.length === 0) empty.classList.remove('hidden'); else empty.classList.add('hidden');
+
+      for (const s of items){
+        const li = document.createElement('li');
+        li.className = 'flex items-center gap-2 p-2 rounded border';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!s.done;
+        cb.onchange = ()=> updateSubtask(s.id, { done: cb.checked });
+
+        const span = document.createElement('span');
+        span.contentEditable = true;
+        span.className = 'flex-1 outline-none';
+        span.textContent = s.title;
+        span.onblur = ()=> updateSubtask(s.id, { title: span.textContent.trim() || s.title });
+
+        const del = document.createElement('button');
+        del.className = 'text-xs px-2 py-1 rounded border border-red-300 text-red-600';
+        del.textContent = 'Eliminar';
+        del.onclick = ()=> deleteSubtask(s.id).then(()=> renderSubtasks(taskId));
+
+        li.append(cb, span, del);
+        list.append(li);
+      }
+    }
+
+    // === Abrir / Cerrar modal (con subtareas integradas)
+    function openModal(task = null){
+      form.reset();
+      fId.value = task?.id || '';
+      fTitle.value = task?.title || '';
+      fDetails.value = task?.details || '';
+      fStatus.value = task?.status || 'backlog';
+      fColor.value = task?.color || '#10b981';
+      fDue.value = task?.due_date || '';
+      fAssignee.value = task?.assignee || '';
+      fStatus.disabled = false;
+
+      // Subtareas
+      const list = document.getElementById('subtasksList');
+      const empty = document.getElementById('subtasksEmpty');
+      list.innerHTML = '';
+      empty.classList.add('hidden');
+      addSubtaskBtn.onclick = null;
+      subtaskInput.onkeydown = null;
+
+      if (task && task.id) {
+        subtasksHint.classList.add('hidden');
+        addSubtaskBtn.disabled = false;
+        subtaskInput.disabled  = false;
+
+        renderSubtasks(task.id);
+
+        addSubtaskBtn.onclick = async ()=>{
+          const t = subtaskInput.value.trim();
+          if(!t) return;
+          await insertSubtask(task.id, t);
+          subtaskInput.value = '';
+          renderSubtasks(task.id);
+        };
+
+        subtaskInput.onkeydown = async (e)=>{
+          if(e.key === 'Enter'){
+            e.preventDefault();
+            const t = subtaskInput.value.trim();
+            if(!t) return;
+            await insertSubtask(task.id, t);
+            subtaskInput.value = '';
+            renderSubtasks(task.id);
+          }
+        };
+      } else {
+        subtasksHint.classList.remove('hidden');
+        addSubtaskBtn.disabled = true;
+        subtaskInput.disabled  = true;
+      }
+
+      modal.classList.remove('hidden');
+    }
+    function closeModal(){ modal.classList.add('hidden'); }
+
+    // === Guardar tarea
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const payload = {
+        id: fId.value || crypto.randomUUID(),
+        board_id: BOARD_ID,
+        title: fTitle.value.trim(),
+        details: fDetails.value.trim() || null,
+        status: fStatus.value,
+        color:  fColor.value || null,
+        due_date: fDue.value || null,
+        assignee: fAssignee.value.trim() || null,
+        created_at: new Date().toISOString(),
+      };
+      if(!payload.title){ fTitle.focus(); return; }
+
+      try{
+        if (USE_SUPABASE){
+          if (fId.value) {
+            const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('tasks').insert(payload);
+            if (error) throw error;
+          }
+          const { data } = await supabase.from('tasks').select('*').eq('board_id', BOARD_ID).order('created_at', {ascending:true});
+          render(data||[]);
+        } else {
+          const idx = memory.tasks.findIndex(x => x.id === payload.id);
+          if (idx >= 0) memory.tasks[idx] = payload; else memory.tasks.push(payload);
+          render(memory.tasks);
+        }
+        closeModal();
+      } catch(err){
+        alert('Error guardando: ' + err.message);
+      }
+    });
+
+    // === Carga inicial
+    (async function boot(){
+      if (USE_SUPABASE){
+        const { data, error } = await supabase.from('tasks').select('*').eq('board_id', BOARD_ID).order('created_at',{ascending:true});
+        if (error) console.error(error);
         render(data||[]);
       } else {
-        // --------- Sin Supabase (en memoria) ----------
-        const idx = memory.tasks.findIndex(x => x.id === payload.id);
-        if (idx >= 0) memory.tasks[idx] = payload;
-        else memory.tasks.push(payload);
         render(memory.tasks);
       }
-      closeModal();
-    } catch(err){
-      alert('Error guardando: ' + err.message);
-    }
-  });
+    })();
 
-  // Inicial: si usas Supabase, carga; si no, inicia vacío
-  (async function boot(){
+    // === Realtime subtasks (opcional)
     if (USE_SUPABASE){
-      const { data, error } = await supabase.from('tasks').select('*').order('created_at',{ascending:true});
-      if (error) console.error(error);
-      render(data||[]);
-    } else {
-      render(memory.tasks);
+      supabase.channel('subtasks-rt')
+        .on('postgres_changes', { event:'*', schema:'public', table:'subtasks' }, ()=>{
+          const currentId = document.getElementById('fId')?.value;
+          if (currentId) renderSubtasks(currentId);
+        })
+        .subscribe();
     }
-  })();
 
-  // ===== Plegado (si ya lo tenías) =====
-  const COLLAPSE_LIMIT = 4;
-  const collapsedState = { backlog:false, doing:false, done:true };
-  function setCollapsed(colKey, collapsed){
-    collapsedState[colKey] = collapsed;
-    const col = columns[colKey];
-    if (!col) return;
-    const cards = Array.from(col.querySelectorAll(':scope > .task'));
-    cards.forEach((el,i)=> el.style.display = (collapsed && i >= COLLAPSE_LIMIT) ? 'none' : '');
-    const btn = col.previousElementSibling?.querySelector(`[data-collapse="${colKey}"]`);
-    const hidden = Math.max(0, cards.length - COLLAPSE_LIMIT);
-    if (btn) btn.textContent = collapsed ? (hidden ? `Desplegar (${hidden})` : 'Desplegar') : 'Plegar';
-  }
-  function applyAutoCollapse(){ Object.keys(columns).forEach(k=> setCollapsed(k, !!collapsedState[k])); }
-  document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-collapse]');
-    if(!btn) return;
-    const key = btn.getAttribute('data-collapse');
-    setCollapsed(key, !collapsedState[key]);
-  });
-  if (USE_SUPABASE){
-  supabase.channel('subtasks-rt')
-    .on('postgres_changes', { event:'*', schema:'public', table:'subtasks' }, (payload)=>{
-      const currentId = document.getElementById('fId')?.value;
-      if (currentId) renderSubtasks(currentId);
-    })
-    .subscribe();
-}
-
-</script>
-
+    // === Plegado de columnas
+    const COLLAPSE_LIMIT = 4; // ← cambia aquí cuántas visibles cuando está plegado
+    const collapsedState = { backlog:false, doing:false, done:true };
+    function setCollapsed(colKey, collapsed){
+      collapsedState[colKey] = collapsed;
+      const col = columns[colKey];
+      if (!col) return;
+      const cards = Array.from(col.querySelectorAll(':scope > .task'));
+      cards.forEach((el,i)=> el.style.display = (collapsed && i >= COLLAPSE_LIMIT) ? 'none' : '');
+      const btn = col.previousElementSibling?.querySelector(`[data-collapse="${colKey}"]`);
+      const hidden = Math.max(0, cards.length - COLLAPSE_LIMIT);
+      if (btn) btn.textContent = collapsed ? (hidden ? `Desplegar (${hidden})` : 'Desplegar') : 'Plegar';
+      col.classList.toggle('fade-bottom', collapsed && hidden > 0);
+    }
+    function applyAutoCollapse(){ Object.keys(columns).forEach(k=> setCollapsed(k, !!collapsedState[k])); }
+    document.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-collapse]');
+      if(!btn) return;
+      const key = btn.getAttribute('data-collapse');
+      setCollapsed(key, !collapsedState[key]);
+    });
+  </script>
 </body>
 </html>
