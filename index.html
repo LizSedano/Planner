@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es" class="h-full bg-slate-50">
 <head>
@@ -15,12 +14,10 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-    /* Simple toast animation */
     @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body class="h-full">
-  <!-- Loading overlay -->
   <div id="loadingOverlay" class="fixed inset-0 bg-black/20 z-50 hidden items-center justify-center">
     <div class="bg-white px-6 py-4 rounded-xl shadow-xl text-slate-700 flex items-center gap-3">
       <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -31,7 +28,6 @@
     </div>
   </div>
 
-  <!-- Toast container -->
   <div id="toastStack" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
   <header class="border-b bg-white/70 backdrop-blur-md sticky top-0 z-40">
@@ -52,18 +48,14 @@
 
   <main class="max-w-6xl mx-auto px-4 py-6">
     <div id="columns" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <!-- Columnas generadas por JS -->
     </div>
   </main>
 
-  <!-- Modal Tarea -->
   <dialog id="taskModal" class="rounded-2xl p-0 w-full max-w-2xl shadow-2xl">
     <form id="taskForm" method="dialog" class="p-0">
       <div class="px-5 pt-4 pb-3 border-b flex items-center justify-between">
         <h2 id="modalTitle" class="text-lg font-semibold">Nueva tarea</h2>
-        <button type="button" id="closeModalBtn" class="p-2 rounded-lg hover:bg-slate-100" aria-label="Cerrar (Esc)">
-          ✖
-        </button>
+        <button type="button" id="closeModalBtn" class="p-2 rounded-lg hover:bg-slate-100" aria-label="Cerrar (Esc)">✖</button>
       </div>
       <div class="p-5 space-y-4">
         <input type="hidden" id="fId">
@@ -98,7 +90,6 @@
           </div>
         </div>
 
-        <!-- Subtareas -->
         <div class="border rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-medium">Subtareas</h3>
@@ -121,30 +112,22 @@
   </dialog>
 
   <script type="module">
-    // ================== Config ==================
+    // ============== Config ==============
     let USE_SUPABASE = true;
     const SUPABASE_URL = "https://vdzslwuljwifougvwrxm.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkenNsd3VsandpZm91Z3Z3cnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjM0MTIsImV4cCI6MjA3MTM5OTQxMn0._695RjBlFLllI--P5DdSxSEGrJ4odmWblkWn5AAlGP4";
     const STATUSES = [
       { id: 'backlog', label: 'Backlog' },
       { id: 'in_progress', label: 'En progreso' },
-      { id: 'done', label: 'Hecho' },
+      { id: 'done', label: 'Hecho' }
     ];
 
-    // ================== Estado ==================
+    // ============== Estado ==============
     let supabase = null;
-    let state = {
-      tasks: [],
-      boardId: 'default',
-      filter: ''
-    };
+    let state = { tasks: [], boardId: 'default', filter: '' };
+    const memory = { tasks: [], subtasks: {} };
 
-    const memory = {
-      tasks: [],
-      subtasks: {} // task_id -> array
-    };
-
-    // Intentar cargar supabase-js con fallback a memoria
+    // Supabase (con fallback)
     try {
       const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
       supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -153,150 +136,91 @@
       USE_SUPABASE = false;
     }
 
-    // ================== Utilidades UI ==================
-    const $ = (sel, root=document) => root.querySelector(sel);
-    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
+    // ============== Utils UI ==============
+    const $ = (s, r=document) => r.querySelector(s);
+    const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
     function setLoading(show, text='Cargando…') {
-      const overlay = $('#loadingOverlay');
       $('#loadingText').textContent = text;
-      overlay.classList.toggle('hidden', !show);
-      overlay.classList.toggle('flex', show);
+      const o = $('#loadingOverlay');
+      o.classList.toggle('hidden', !show);
+      o.classList.toggle('flex', show);
     }
-
     function showToast(msg, type='ok') {
       const el = document.createElement('div');
-      el.className = 'px-3 py-2 rounded-lg shadow bg-white text-sm border ' +
-        (type==='ok' ? 'border-emerald-200 text-emerald-800' : 'border-rose-200 text-rose-800');
+      el.className = 'px-3 py-2 rounded-lg shadow bg-white text-sm border ' + (type==='ok' ? 'border-emerald-200 text-emerald-800' : 'border-rose-200 text-rose-800');
       el.style.animation = 'slideIn .15s ease-out';
       el.textContent = msg;
       $('#toastStack').appendChild(el);
       setTimeout(() => el.remove(), 2600);
     }
+    function escapeHtml (s) { return (s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 
-    function escapeHtml (s) {
-      return (s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
-    }
-
-    // ================== Datos: tareas ==================
+    // ============== Datos: tareas ==============
     async function loadTasks() {
       if (USE_SUPABASE) {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .eq('board_id', state.boardId)
-          .order('created_at', { ascending: true });
+        const { data, error } = await supabase.from('tasks').select('*').eq('board_id', state.boardId).order('created_at', { ascending: true });
         if (error) throw error;
         state.tasks = data || [];
       } else {
         state.tasks = memory.tasks.filter(t => t.board_id === state.boardId);
       }
     }
-
     async function saveTask(payload, isEdit) {
       if (USE_SUPABASE) {
-        if (isEdit) {
-          const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id);
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase.from('tasks').insert(payload).select().single();
-          if (error) throw error;
-          payload.id = data.id; // asegurar id
-        }
+        if (isEdit) { const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id); if (error) throw error; }
+        else { const { data, error } = await supabase.from('tasks').insert(payload).select().single(); if (error) throw error; payload.id = data.id; }
       } else {
-        const idx = memory.tasks.findIndex(x => x.id === payload.id);
-        if (idx >= 0) memory.tasks[idx] = payload; else memory.tasks.push(payload);
+        const i = memory.tasks.findIndex(x => x.id === payload.id);
+        if (i>=0) memory.tasks[i]=payload; else memory.tasks.push(payload);
       }
       return payload.id;
     }
-
     async function deleteTask(id) {
-      if (USE_SUPABASE) {
-        const { error } = await supabase.from('tasks').delete().eq('id', id);
-        if (error) throw error;
-      } else {
-        const i = memory.tasks.findIndex(t => t.id === id);
-        if (i>=0) memory.tasks.splice(i,1);
-        delete memory.subtasks[id];
-      }
+      if (USE_SUPABASE) { const { error } = await supabase.from('tasks').delete().eq('id', id); if (error) throw error; }
+      else { const i = memory.tasks.findIndex(t => t.id === id); if (i>=0) memory.tasks.splice(i,1); delete memory.subtasks[id]; }
     }
 
-    // ================== Datos: subtareas ==================
+    // ============== Datos: subtareas ==============
     async function listSubtasks(taskId){
       if (!taskId) return [];
-      if (USE_SUPABASE){
-        const { data, error } = await supabase
-          .from('subtasks')
-          .select('id, title, done')
-          .eq('task_id', taskId)
-          .order('created_at', { ascending: true });
+      if (USE_SUPABASE) {
+        const { data, error } = await supabase.from('subtasks').select('id, title, done').eq('task_id', taskId).order('created_at', { ascending: true });
         if (error) { console.error(error); return []; }
         return data || [];
-      } else {
-        return memory.subtasks[taskId] || [];
-      }
+      } else { return memory.subtasks[taskId] || []; }
     }
-
     async function insertSubtask(taskId, title){
-      if (USE_SUPABASE){
-        // Obtener board de la tarea
-        const { data: taskRow, error: taskErr } = await supabase
-          .from('tasks').select('id, board_id').eq('id', taskId).single();
+      if (USE_SUPABASE) {
+        const { data: taskRow, error: taskErr } = await supabase.from('tasks').select('id, board_id').eq('id', taskId).single();
         if (taskErr) throw taskErr;
-        const { data, error } = await supabase.from('subtasks')
-          .insert({ board_id: taskRow?.board_id || state.boardId, task_id: taskId, title, done: false })
-          .select().single();
-        if (error) throw error;
-        return data;
+        const { data, error } = await supabase.from('subtasks').insert({ board_id: taskRow?.board_id || state.boardId, task_id: taskId, title, done:false }).select().single();
+        if (error) throw error; return data;
       } else {
         const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
-        memory.subtasks[taskId] = memory.subtasks[taskId] || [];
-        memory.subtasks[taskId].push(item);
-        return item;
+        (memory.subtasks[taskId] ||= []).push(item); return item;
       }
     }
-
     async function updateSubtask(id, patch){
-      if (USE_SUPABASE){
-        const { data, error } = await supabase.from('subtasks').update(patch).eq('id', id).select().single();
-        if (error) throw error;
-        return data;
-      } else {
-        for (const arr of Object.values(memory.subtasks)){
-          const i = arr.findIndex(s => s.id === id);
-          if (i>=0) { Object.assign(arr[i], patch); return arr[i]; }
-        }
-      }
+      if (USE_SUPABASE) { const { data, error } = await supabase.from('subtasks').update(patch).eq('id', id).select().single(); if (error) throw error; return data; }
+      else { for (const arr of Object.values(memory.subtasks)) { const i = arr.findIndex(s => s.id===id); if (i>=0) { Object.assign(arr[i], patch); return arr[i]; } } }
     }
-
     async function deleteSubtask(id){
-      if (USE_SUPABASE){
-        const { error } = await supabase.from('subtasks').delete().eq('id', id);
-        if (error) throw error;
-      } else {
-        for (const [tid, arr] of Object.entries(memory.subtasks)){
-          const i = arr.findIndex(s => s.id === id);
-          if (i>=0) { arr.splice(i,1); return; }
-        }
-      }
+      if (USE_SUPABASE) { const { error } = await supabase.from('subtasks').delete().eq('id', id); if (error) throw error; }
+      else { for (const [tid, arr] of Object.entries(memory.subtasks)) { const i = arr.findIndex(s => s.id===id); if (i>=0) { arr.splice(i,1); return; } } }
     }
-
     async function renderSubtasks(taskId){
-      const list = $('#subtasksList');
-      const empty = $('#subtasksEmpty');
-      list.innerHTML = '';
+      const list = $('#subtasksList'); const empty = $('#subtasksEmpty'); list.innerHTML='';
       if (!taskId) { empty.classList.remove('hidden'); return; }
       const items = await listSubtasks(taskId);
       if (!items.length) { empty.classList.remove('hidden'); return; }
       empty.classList.add('hidden');
       const frag = document.createDocumentFragment();
-      for (const s of items){
+      for (const s of items) {
         const li = document.createElement('li');
-        li.className = 'flex items-center gap-2 py-1';
-        li.dataset.id = s.id;
+        li.className = 'flex items-center gap-2 py-1'; li.dataset.id = s.id;
         li.innerHTML = `
           <input aria-label="Marcar subtarea" type="checkbox" class="subtask-toggle" ${s.done?'checked':''}>
-          <span class="flex-1 ${s.done?'line-through opacity-60':''}">{escapeHtml(s.title)}</span>
+          <span class="flex-1 ${s.done?'line-through opacity-60':''}">${escapeHtml(s.title)}</span>
           <button type="button" aria-label="Eliminar subtarea" class="subtask-del text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-200">Eliminar</button>
         `;
         frag.appendChild(li);
@@ -304,12 +228,12 @@
       list.appendChild(frag);
     }
 
-    // ================== Render columnas & tarjetas ==================
+    // ============== Render columnas & tarjetas ==============
     function cardTemplate(t) {
       const due = t.due_date ? new Date(t.due_date).toLocaleDateString() : '';
       return `
         <article class="task-card border rounded-xl p-3 bg-white shadow-sm hover:shadow transition cursor-grab active:cursor-grabbing"
-                 draggable="true" data-id="{t.id}" style="border-left-width:6px; border-left-color: {t.color||'#94a3b8'}">
+                 draggable="true" data-id="${t.id}" style="border-left-width:6px; border-left-color: ${t.color || '#94a3b8'}">
           <div class="flex items-start gap-2">
             <h4 class="font-medium flex-1 break-words">${escapeHtml(t.title)}</h4>
             <button class="edit-btn p-1 rounded hover:bg-slate-100" aria-label="Editar">✎</button>
@@ -320,138 +244,81 @@
             ${t.assignee ? `<span>👤 ${escapeHtml(t.assignee)}</span>` : ''}
             ${due ? `<span>📅 ${due}</span>` : ''}
           </div>
-        </article>
-      `;
+        </article>`;
     }
-
     function renderColumns() {
-      const container = $('#columns');
-      container.innerHTML = '';
-      for (const st of STATUSES){
+      const container = $('#columns'); container.innerHTML='';
+      for (const st of STATUSES) {
         const col = document.createElement('section');
-        col.className = 'rounded-xl bg-slate-100/70 border p-3 min-h-[200px]';
-        col.dataset.status = st.id;
+        col.className = 'rounded-xl bg-slate-100/70 border p-3 min-h-[200px]'; col.dataset.status = st.id;
         col.innerHTML = `
           <header class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-slate-800">{st.label}</h3>
+            <h3 class="font-semibold text-slate-800">${st.label}</h3>
           </header>
-          <div class="dropzone space-y-2 min-h-[120px]" aria-label="Zona de soltar {st.label}"></div>
+          <div class="dropzone space-y-2 min-h-[120px]" aria-label="Zona de soltar ${st.label}"></div>
         `;
         container.appendChild(col);
       }
       renderCards();
     }
-
     function renderCards() {
       const term = state.filter.trim().toLowerCase();
       for (const col of $$('.dropzone')) col.innerHTML = '';
-      const tasks = state.tasks.filter(t => {
-        const matchBoard = t.board_id === state.boardId;
-        const matches = !term || (t.title?.toLowerCase().includes(term) || t.assignee?.toLowerCase().includes(term));
-        return matchBoard && matches;
-      });
-      for (const t of tasks){
-        const dz = $(`section[data-status="{t.status}"] .dropzone`);
+      const tasks = state.tasks.filter(t => (t.board_id===state.boardId) && (!term || (t.title?.toLowerCase().includes(term) || t.assignee?.toLowerCase().includes(term))));
+      for (const t of tasks) {
+        const dz = document.querySelector(`section[data-status="${t.status}"] .dropzone`);
         if (!dz) continue;
-        const wrap = document.createElement('div');
-        wrap.innerHTML = cardTemplate(t).trim();
-        const card = wrap.firstElementChild;
-        dz.appendChild(card);
+        const wrap = document.createElement('div'); wrap.innerHTML = cardTemplate(t).trim();
+        dz.appendChild(wrap.firstElementChild);
       }
     }
 
-    // ================== Drag & Drop ==================
+    // ============== Drag & Drop ==============
     document.addEventListener('dragstart', (e) => {
-      const card = e.target.closest('.task-card');
-      if (!card) return;
-      e.dataTransfer.setData('text/plain', card.dataset.id);
-      e.dataTransfer.effectAllowed = 'move';
+      const card = e.target.closest('.task-card'); if (!card) return;
+      e.dataTransfer.setData('text/plain', card.dataset.id); e.dataTransfer.effectAllowed='move';
     });
-
-    document.addEventListener('dragover', (e) => {
-      if (e.target.closest('.dropzone')) e.preventDefault();
-    });
-
+    document.addEventListener('dragover', (e) => { if (e.target.closest('.dropzone')) e.preventDefault(); });
     document.addEventListener('drop', async (e) => {
-      const zone = e.target.closest('.dropzone');
-      if (!zone) return;
-      e.preventDefault();
-      const id = e.dataTransfer.getData('text/plain');
-      const status = zone.closest('section').dataset.status;
-      const t = state.tasks.find(x => x.id === id);
-      if (!t || t.status === status) return;
-      t.status = status;
-      try {
-        if (USE_SUPABASE) { await supabase.from('tasks').update({ status }).eq('id', id); }
-        renderCards();
-      } catch (err) {
-        showToast('No se pudo mover la tarjeta: ' + err.message, 'err');
-      }
+      const zone = e.target.closest('.dropzone'); if (!zone) return; e.preventDefault();
+      const id = e.dataTransfer.getData('text/plain'); const status = zone.closest('section').dataset.status;
+      const t = state.tasks.find(x => x.id===id); if (!t || t.status===status) return; t.status = status;
+      try { if (USE_SUPABASE) await supabase.from('tasks').update({ status }).eq('id', id); renderCards(); }
+      catch (err) { showToast('No se pudo mover la tarjeta: '+err.message, 'err'); }
     });
 
-    // ================== Modal: abrir/cerrar ==================
-    const modal = $('#taskModal');
-    const form = $('#taskForm');
-    const fId = $('#fId'), fTitle = $('#fTitle'), fStatus = $('#fStatus'), fColor = $('#fColor'),
-          fDue = $('#fDue'), fAssignee = $('#fAssignee'), fDetails = $('#fDetails');
-    const saveCloseBtn = $('#saveCloseBtn');
-    const saveStayBtn  = $('#saveStayBtn');
-
+    // ============== Modal ==============
+    const modal = $('#taskModal'); const form = $('#taskForm');
+    const fId = $('#fId'), fTitle = $('#fTitle'), fStatus = $('#fStatus'), fColor = $('#fColor'), fDue = $('#fDue'), fAssignee = $('#fAssignee'), fDetails = $('#fDetails');
+    const saveCloseBtn = $('#saveCloseBtn'); const saveStayBtn = $('#saveStayBtn');
     function openModal(task) {
       $('#modalTitle').textContent = task ? 'Editar tarea' : 'Nueva tarea';
-      fId.value        = task?.id || '';
-      fTitle.value     = task?.title || '';
-      fStatus.value    = task?.status || 'backlog';
-      fColor.value     = task?.color || '#2563eb';
-      fDue.value       = task?.due_date || '';
-      fAssignee.value  = task?.assignee || '';
-      fDetails.value   = task?.details || '';
-      $('#subtasksHint').classList.toggle('hidden', !!task?.id);
-      renderSubtasks(task?.id || '');
-      modal.showModal();
-      fTitle.focus();
+      fId.value = task?.id || ''; fTitle.value = task?.title || ''; fStatus.value = task?.status || 'backlog';
+      fColor.value = task?.color || '#2563eb'; fDue.value = task?.due_date || ''; fAssignee.value = task?.assignee || ''; fDetails.value = task?.details || '';
+      $('#subtasksHint').classList.toggle('hidden', !!task?.id); renderSubtasks(task?.id || ''); modal.showModal(); fTitle.focus();
     }
-
     function closeModal() { modal.close(); }
-
     $('#closeModalBtn').addEventListener('click', closeModal);
     $('#newTaskBtn').addEventListener('click', () => openModal(null));
+    document.addEventListener('keydown', (e) => { if (e.key==='Escape' && modal.open) closeModal(); if ((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='enter' && modal.open) { saveStayBtn.click(); } });
 
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.open) closeModal();
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'enter' && modal.open) {
-        // Trigger guardar & seguir
-        saveStayBtn.click();
-      }
-    });
-
-    // Editar / eliminar desde tarjeta (delegado)
+    // Editar / eliminar
     document.addEventListener('click', async (e) => {
-      const card = e.target.closest('.task-card');
-      if (!card) return;
-      const id = card.dataset.id;
-      const t = state.tasks.find(x => x.id === id);
-      if (e.target.closest('.edit-btn')) { openModal(t); }
+      const card = e.target.closest('.task-card'); if (!card) return;
+      const id = card.dataset.id; const t = state.tasks.find(x => x.id===id);
+      if (e.target.closest('.edit-btn')) openModal(t);
       if (e.target.closest('.del-btn')) {
         if (!confirm('¿Eliminar esta tarea?')) return;
-        try {
-          setLoading(true, 'Eliminando…');
-          await deleteTask(id);
-          state.tasks = state.tasks.filter(x => x.id !== id);
-          renderCards();
-          showToast('Tarea eliminada');
-        } catch (err) {
-          showToast('No se pudo eliminar: ' + err.message, 'err');
-        } finally { setLoading(false); }
+        try { setLoading(true,'Eliminando…'); await deleteTask(id); state.tasks = state.tasks.filter(x=>x.id!==id); renderCards(); showToast('Tarea eliminada'); }
+        catch (err) { showToast('No se pudo eliminar: '+err.message, 'err'); }
+        finally { setLoading(false); }
       }
     });
 
-    // ================== Guardar tarea ==================
+    // ============== Guardar ==============
     let closeAfterSave = true;
     saveCloseBtn.addEventListener('click', () => closeAfterSave = true);
     saveStayBtn.addEventListener('click', () => closeAfterSave = false);
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const isEdit = !!fId.value;
@@ -467,103 +334,57 @@
         created_at: new Date().toISOString()
       };
       if (!payload.title) { fTitle.focus(); return; }
-      // Sanitizar básico
-      payload.title = escapeHtml(payload.title);
-      if (payload.details) payload.details = escapeHtml(payload.details);
-
+      payload.title = escapeHtml(payload.title); if (payload.details) payload.details = escapeHtml(payload.details);
       try {
         setLoading(true, isEdit ? 'Guardando cambios…' : 'Creando tarea…');
         const id = await saveTask(payload, isEdit);
-        // Sync local
         const idx = state.tasks.findIndex(x => x.id === id);
-        if (idx >= 0) state.tasks[idx] = payload; else state.tasks.push(payload);
-        renderCards();
-        showToast(isEdit ? 'Cambios guardados' : 'Tarea creada');
-        // Preparar subtareas
-        fId.value = id;
-        $('#subtasksHint').classList.add('hidden');
-        await renderSubtasks(id);
+        if (idx>=0) state.tasks[idx]=payload; else state.tasks.push(payload);
+        renderCards(); showToast(isEdit ? 'Cambios guardados' : 'Tarea creada');
+        fId.value = id; $('#subtasksHint').classList.add('hidden'); await renderSubtasks(id);
         if (closeAfterSave) closeModal();
-      } catch (err) {
-        showToast('Error guardando: ' + err.message, 'err');
-      } finally { setLoading(false); }
+      } catch (err) { showToast('Error guardando: '+err.message, 'err'); } finally { setLoading(false); }
     });
 
-    // ================== Subtareas eventos ==================
-    const subtasksListEl = $('#subtasksList');
-    const subtaskInput = $('#subtaskInput');
-    const addSubtaskBtn = $('#addSubtaskBtn');
-
+    // ============== Subtareas eventos ==============
+    const subtasksListEl = $('#subtasksList'); const subtaskInput = $('#subtaskInput'); const addSubtaskBtn = $('#addSubtaskBtn');
     addSubtaskBtn.addEventListener('click', async () => {
-      const taskId = fId.value;
-      const text = subtaskInput.value.trim();
+      const taskId = fId.value; const text = subtaskInput.value.trim();
       if (!taskId) { $('#subtasksHint').classList.remove('hidden'); return; }
       if (!text) return;
-      try {
-        await insertSubtask(taskId, escapeHtml(text));
-        subtaskInput.value = '';
-        await renderSubtasks(taskId);
-      } catch (err) {
-        showToast('No se pudo añadir: ' + err.message, 'err');
-      }
+      try { await insertSubtask(taskId, escapeHtml(text)); subtaskInput.value=''; await renderSubtasks(taskId); }
+      catch (err) { showToast('No se pudo añadir: '+err.message,'err'); }
     });
-
-    subtaskInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); addSubtaskBtn.click(); }
-    });
-
-    // Delegados: toggle / delete
+    subtaskInput.addEventListener('keydown', (e) => { if (e.key==='Enter') { e.preventDefault(); addSubtaskBtn.click(); } });
     subtasksListEl.addEventListener('change', async (e) => {
       if (!e.target.classList.contains('subtask-toggle')) return;
-      const li = e.target.closest('li');
-      const id = li.dataset.id;
-      const done = e.target.checked;
-      try {
-        await updateSubtask(id, { done });
-        const span = li.querySelector('span');
-        span.classList.toggle('line-through', done);
-        span.classList.toggle('opacity-60', done);
-      } catch (err) {
-        e.target.checked = !done;
-        showToast('No se pudo actualizar la subtarea', 'err');
-      }
+      const li = e.target.closest('li'); const id = li.dataset.id; const done = e.target.checked;
+      try { await updateSubtask(id, { done }); const span = li.querySelector('span'); span.classList.toggle('line-through', done); span.classList.toggle('opacity-60', done); }
+      catch (err) { e.target.checked = !done; showToast('No se pudo actualizar la subtarea','err'); }
     });
-
     subtasksListEl.addEventListener('click', async (e) => {
       if (!e.target.classList.contains('subtask-del')) return;
-      const li = e.target.closest('li');
-      const id = li.dataset.id;
+      const li = e.target.closest('li'); const id = li.dataset.id;
       if (!confirm('¿Eliminar esta subtarea?')) return;
       try { await deleteSubtask(id); li.remove(); if (!subtasksListEl.children.length) $('#subtasksEmpty').classList.remove('hidden'); }
-      catch (err) { showToast('No se pudo eliminar la subtarea', 'err'); }
+      catch (err) { showToast('No se pudo eliminar la subtarea','err'); }
     });
 
-    // ================== Búsqueda & Tablero ==================
+    // ============== Búsqueda & Tablero ==============
     $('#searchInput').addEventListener('input', (e) => { state.filter = e.target.value; renderCards(); });
     $('#applyBoardBtn').addEventListener('click', async () => {
-      const val = $('#boardInput').value.trim() || 'default';
-      state.boardId = val;
-      try {
-        setLoading(true, 'Cargando tablero…');
-        await loadTasks();
-        renderColumns();
-        showToast('Tablero: ' + val);
-      } catch (err) { showToast('Error cargando tablero: ' + err.message, 'err'); }
+      const val = $('#boardInput').value.trim() || 'default'; state.boardId = val;
+      try { setLoading(true,'Cargando tablero…'); await loadTasks(); renderColumns(); showToast('Tablero: '+val); }
+      catch (err) { showToast('Error cargando tablero: '+err.message,'err'); }
       finally { setLoading(false); }
     });
 
-    // ================== Init ==================
+    // ============== Init ==============
     (async function init(){
       state.boardId = $('#boardInput').value.trim() || 'default';
-      try {
-        setLoading(true, 'Cargando datos…');
-        renderColumns();
-        await loadTasks();
-        renderCards();
-      } catch (err) {
-        showToast('Modo sin conexión (memoria): ' + err.message, 'err');
-        USE_SUPABASE = false;
-      } finally { setLoading(false); }
+      try { setLoading(true,'Cargando datos…'); renderColumns(); await loadTasks(); renderCards(); }
+      catch (err) { showToast('Modo sin conexión (memoria): '+err.message,'err'); USE_SUPABASE=false; }
+      finally { setLoading(false); }
     })();
   </script>
 </body>
