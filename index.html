@@ -93,6 +93,18 @@
 <label class="block text-sm">Responsable</label>
 <input id="fAssignee" class="w-full rounded border px-2 py-1">
 </div>
+  <!-- Subtareas -->
+<div class="mt-2">
+  <label class="block text-sm font-medium">Subtareas</label>
+  <div class="flex gap-2 mt-1">
+    <input id="subtaskInput" class="flex-1 rounded border px-2 py-1" placeholder="Escribe una subtarea y presiona Enter" />
+    <button type="button" id="addSubtaskBtn" class="px-2 py-1 rounded bg-emerald-500 text-white">Añadir</button>
+  </div>
+  <ul id="subtasksList" class="mt-2 space-y-2 max-h-48 overflow-auto"></ul>
+  <p id="subtasksEmpty" class="text-xs text-slate-500 mt-1 hidden">Aún no hay subtareas.</p>
+  <p id="subtasksHint" class="text-xs text-slate-500 mt-1 hidden">Guarda primero la tarea para poder añadir subtareas.</p>
+</div>
+
 <div class="flex justify-end gap-2 pt-2">
 <button type="button" id="btnCancel" class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700">Cancelar</button>
 <button type="submit" class="px-3 py-1 rounded bg-emerald-500 text-white">Guardar</button>
@@ -106,7 +118,7 @@
   // ================
   // (Opcional) Supabase
   // ================
-  const USE_SUPABASE = false; // <- pon true si vas a usar Supabase en este archivo
+  const USE_SUPABASE = true; // <- pon true si vas a usar Supabase en este archivo
   let supabase = null;
   if (USE_SUPABASE) {
     const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
@@ -126,6 +138,10 @@
   };
 
   // Modal & campos
+ const subtaskInput = document.getElementById('subtaskInput');
+const addSubtaskBtn = document.getElementById('addSubtaskBtn');
+const subtasksHint  = document.getElementById('subtasksHint');
+
   const modal = document.getElementById('taskModal');
   const form  = document.getElementById('taskForm');
   const fId   = document.getElementById('fId');
@@ -174,6 +190,93 @@
     }
     applyAutoCollapse(); // si ya usas el plegado
   }
+// ===== SUBTAREAS =====
+async function listSubtasks(taskId){
+  if (USE_SUPABASE){
+    const { data, error } = await supabase
+      .from('subtasks').select('*')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true });
+    if (error) { console.error(error); return []; }
+    return data || [];
+  } else {
+    return memory.subtasks[taskId] || [];
+  }
+}
+
+async function insertSubtask(taskId, title){
+  if (USE_SUPABASE){
+    const { data, error } = await supabase
+      .from('subtasks').insert({ task_id: taskId, title, done:false })
+      .select().single();
+    if (error) throw error;
+    return data;
+  } else {
+    const item = { id: crypto.randomUUID(), task_id: taskId, title, done:false };
+    memory.subtasks[taskId] = memory.subtasks[taskId] || [];
+    memory.subtasks[taskId].push(item);
+    return item;
+  }
+}
+
+async function updateSubtask(id, patch){
+  if (USE_SUPABASE){
+    const { data, error } = await supabase
+      .from('subtasks').update(patch).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  } else {
+    for (const arr of Object.values(memory.subtasks)){
+      const i = arr.findIndex(s => s.id === id);
+      if (i >= 0) { Object.assign(arr[i], patch); return arr[i]; }
+    }
+  }
+}
+
+async function deleteSubtask(id){
+  if (USE_SUPABASE){
+    const { error } = await supabase.from('subtasks').delete().eq('id', id);
+    if (error) throw error;
+  } else {
+    for (const key of Object.keys(memory.subtasks)){
+      memory.subtasks[key] = memory.subtasks[key].filter(s => s.id !== id);
+    }
+  }
+}
+
+async function renderSubtasks(taskId){
+  const list = document.getElementById('subtasksList');
+  const empty = document.getElementById('subtasksEmpty');
+  list.innerHTML = '';
+  if (!taskId){ empty.classList.add('hidden'); return; }
+
+  const items = await listSubtasks(taskId);
+  if (items.length === 0) empty.classList.remove('hidden'); else empty.classList.add('hidden');
+
+  for (const s of items){
+    const li = document.createElement('li');
+    li.className = 'flex items-center gap-2 p-2 rounded border';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!s.done;
+    cb.onchange = ()=> updateSubtask(s.id, { done: cb.checked });
+
+    const span = document.createElement('span');
+    span.contentEditable = true;
+    span.className = 'flex-1 outline-none';
+    span.textContent = s.title;
+    span.onblur = ()=> updateSubtask(s.id, { title: span.textContent.trim() || s.title });
+
+    const del = document.createElement('button');
+    del.className = 'text-xs px-2 py-1 rounded border border-red-300 text-red-600';
+    del.textContent = 'Eliminar';
+    del.onclick = ()=> deleteSubtask(s.id).then(()=> renderSubtasks(taskId));
+
+    li.append(cb, span, del);
+    list.append(li);
+  }
+}
 
   // Abrir/Cerrar modal
   function openModal(task=null){
@@ -188,6 +291,60 @@
     fStatus.disabled = false;
     modal.classList.remove('hidden');
   }
+  function openModal(task=null){
+  form.reset();
+  fId.value = task?.id || '';
+  fTitle.value = task?.title || '';
+  fDetails.value = task?.details || '';
+  fStatus.value = task?.status || 'backlog';
+  fColor.value = task?.color || '#10b981';
+  fDue.value = task?.due_date || '';
+  fAssignee.value = task?.assignee || '';
+  fStatus.disabled = false;
+
+  modal.classList.remove('hidden');
+}
+  // Subtareas
+const subtaskInput = document.getElementById('subtaskInput');
+const addSubtaskBtn = document.getElementById('addSubtaskBtn');
+const subtasksHint  = document.getElementById('subtasksHint');
+
+if (task && task.id) {
+  subtasksHint.classList.add('hidden');
+  addSubtaskBtn.disabled = false;
+  subtaskInput.disabled  = false;
+
+  // Cargar subtareas existentes
+  renderSubtasks(task.id);
+
+  // Añadir nuevas
+  addSubtaskBtn.onclick = async ()=>{
+    const t = subtaskInput.value.trim();
+    if(!t) return;
+    await insertSubtask(task.id, t);
+    subtaskInput.value = '';
+    renderSubtasks(task.id);
+  };
+  subtaskInput.onkeydown = async (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const t = subtaskInput.value.trim();
+      if(!t) return;
+      await insertSubtask(task.id, t);
+      subtaskInput.value = '';
+      renderSubtasks(task.id);
+    }
+  };
+} else {
+  // Si todavía no existe la tarea (nuevo registro)
+  document.getElementById('subtasksList').innerHTML = '';
+  document.getElementById('subtasksEmpty').classList.add('hidden');
+  subtasksHint.classList.remove('hidden');
+  addSubtaskBtn.disabled = true;
+  subtaskInput.disabled  = true;
+}
+
+
   function closeModal(){ modal.classList.add('hidden'); }
 
   // Guardar
@@ -263,6 +420,15 @@
     const key = btn.getAttribute('data-collapse');
     setCollapsed(key, !collapsedState[key]);
   });
+  if (USE_SUPABASE){
+  supabase.channel('subtasks-rt')
+    .on('postgres_changes', { event:'*', schema:'public', table:'subtasks' }, (payload)=>{
+      const currentId = document.getElementById('fId')?.value;
+      if (currentId) renderSubtasks(currentId);
+    })
+    .subscribe();
+}
+
 </script>
 
 </body>
