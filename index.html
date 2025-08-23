@@ -116,6 +116,7 @@
     let USE_SUPABASE = true;
     const SUPABASE_URL = "https://vdzslwuljwifougvwrxm.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkenNsd3VsandpZm91Z3Z3cnhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjM0MTIsImV4cCI6MjA3MTM5OTQxMn0._695RjBlFLllI--P5DdSxSEGrJ4odmWblkWn5AAlGP4";
+    const COLLAPSE_LIMIT = 4; // ← muestra 4 por columna
     const STATUSES = [
       { id: 'backlog', label: 'Backlog' },
       { id: 'in_progress', label: 'En progreso' },
@@ -154,6 +155,44 @@
       setTimeout(() => el.remove(), 2600);
     }
     function escapeHtml (s) { return (s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+// Plegado por columna: muestra solo las primeras N tarjetas
+function applyCollapse(zone) {
+  const cards = Array.from(zone.querySelectorAll('.task-card'));
+  // Usa un flag en el DOM para saber si esta columna está expandida
+  const expanded = zone.dataset.expanded === 'true';
+
+  // Botón de toggle: vive como hermano de la dropzone
+  let btn = zone.parentElement.querySelector('.collapse-toggle');
+
+  // Si no excede el límite, muestra todo y quita botón si existe
+  if (cards.length <= COLLAPSE_LIMIT) {
+    cards.forEach(c => c.classList.remove('hidden'));
+    if (btn) btn.remove();
+    return;
+  }
+
+  // Oculta/mostrar según estado
+  cards.forEach((c, i) => c.classList.toggle('hidden', !expanded && i >= COLLAPSE_LIMIT));
+  const hiddenCount = Math.max(0, cards.length - COLLAPSE_LIMIT);
+
+  // Crea el botón si no existe
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'collapse-toggle mt-2 text-sm text-slate-600 hover:text-slate-900';
+    // Inserta el botón debajo de la lista (dropzone está dentro de la columna)
+    zone.parentElement.appendChild(btn);
+
+    btn.addEventListener('click', () => {
+      // alterna expandido/plegado y reaplica
+      zone.dataset.expanded = zone.dataset.expanded === 'true' ? 'false' : 'true';
+      applyCollapse(zone);
+    });
+  }
+
+  // Texto del botón
+  btn.textContent = expanded ? 'Ver menos' : `Ver ${hiddenCount} más`;
+}
 
     // ============== Datos: tareas ==============
     async function loadTasks() {
@@ -272,6 +311,8 @@
         dz.appendChild(wrap.firstElementChild);
       }
     }
+// Al final de renderCards()
+$$('.dropzone').forEach(applyCollapse);
 
     // ============== Drag & Drop ==============
     document.addEventListener('dragstart', (e) => {
